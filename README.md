@@ -58,9 +58,20 @@ genuinely doesn't exist). `findByListingId`/`findByPlate` are async now for this
   or flood loss on record), not something Encar itself reports. 12 full-size photos
   parsed correctly (real `<img src="https://img.carnect.biz/...">` tags, deduped by
   path so the same photo at a different crop isn't listed twice).
-- Catalog pages (`/catalog`, `/catalog?tab=encar`) — card-level brand/model, year,
-  mileage, fuel, reg. date, price (Encar shows USD + KRW; HeyDealer often shows "Price
-  on request" instead). Used internally for the plate-search fallback below.
+- `heydealer` listing pages (`/car/heydealer/{id}`, IDs short mixed-case alphanumeric —
+  e.g. `lG22apbQ`, never numeric) — verified against a real listing (2023 Kia Carnival,
+  `/car/heydealer/lG22apbQ`). Structurally different from Encar in three ways, all now
+  handled: (1) condition data (owner changes, this-car/counterpart accidents, total
+  loss, flood damage, theft records, inspection-valid-until date) arrives as plain
+  `ta-specs__cell` rows, not embedded JSON — `buildHeydealerCondition` reads it
+  straight from the specs map Encar also uses, no RSC-payload parsing needed; (2)
+  photos are un-proxied `<img src="https://heydealer-api.s3.amazonaws.com/...">` tags,
+  not `/_next/image?url=` like its own catalog thumbnails or `/api/images/`/
+  `img.carnect.biz` like the other two sources — `extractPhotos` now matches this
+  pattern too (24/24 photos parsed correctly on the sample); (3) no `<!-- --> <!-- -->`
+  brand/model marker on the `<h1>` (unlike Encar's), so `brand` comes back empty and
+  the full name lands in `model` — cosmetic only, `title_en` is still correct. No
+  `application/ld+json` block either (same as supercar).
 - **No plate number anywhere** — checked both the visible HTML and the embedded JSON
   (including likely key names: `carNo`, `plateNo`, `licensePlate`, `regNo` — none
   present) on the real Encar page. This confirms the PRD §6 concern directly rather
@@ -68,27 +79,33 @@ genuinely doesn't exist). `findByListingId`/`findByPlate` are async now for this
 - Real image hosts: `img.carnect.biz` (Encar), `heydealer-api.s3.amazonaws.com`
   (HeyDealer), `carnect.biz/api/images/...` (Supercar) — all in `next.config.js`.
 
+**Bare listing-ID routing bug, fixed**: a listing ID typed/passed without its source
+prefix (e.g. `lG22apbQ` instead of `heydealer/lG22apbQ`) used to default to `encar`
+unconditionally, building the wrong URL for any non-Encar source — a real HeyDealer
+listing 404ing this way looked exactly like "HeyDealer can't be looked up at all," which
+is what surfaced it. `parseListingId` now treats a purely-numeric bare ID as `encar`
+(unambiguous — it's the only numeric-ID source) and anything else bare as `heydealer`
+(the only other source whose IDs staff would plausibly type unprefixed; a bare supercar
+ID is inherently ambiguous with this scheme, but staff only ever encounter supercar IDs
+already embedded in a `/car/supercar/...` URL, so this shouldn't come up in practice).
+
 **Best-effort, NOT verified**:
-- **HeyDealer listing detail pages** — still no real sample. `parseListingHtml` falls
-  back to the same selectors confirmed on encar/supercar (shared `ta-`/`cd-`-prefixed
-  design system), and returns `null` → mock fallback if a real page doesn't match, same
-  safe-degrade as before. Send me one (`curl https://carnect.biz/car/heydealer/{id}`)
-  and I'll verify it the same way.
-- **Plate lookup** — still unconfirmed. The Encar detail page I now have is a normal
-  listing, not a plate-search *result*, so it doesn't tell me what request the search
-  box makes. `fetchLiveByPlate` still guesses `/catalog?tab=encar&plate={value}`; zero
+- **Plate lookup** — still unconfirmed. Every detail page I have is a normal listing,
+  not a plate-search *result*, so none of them tell me what request the search box
+  makes. `fetchLiveByPlate` still guesses `/catalog?tab=encar&plate={value}`; zero
   results falls back to mock. The only way to actually confirm this is capturing the
   real request — open that search box in devtools, search a real plate, copy the
   request URL — I can't get there from a listing page.
-- Brand/model splitting: the `<!-- --> <!-- -->` marker trick is now confirmed on a
-  real encar `<h1>` too (`Chevrolet<!-- --> <!-- -->Bolt EUV Premiere`), not just
-  catalog cards — so this is more solid than before, just still worth flagging since
-  HeyDealer's template is unconfirmed.
+- Brand/model splitting: the `<!-- --> <!-- -->` marker trick is confirmed on Encar's
+  `<h1>` (`Chevrolet<!-- --> <!-- -->Bolt EUV Premiere`) and catalog cards, but does
+  *not* appear on HeyDealer's `<h1>` — so it degrades to "everything in `model`" there,
+  by design (see above), not a bug.
 
 `Vehicle.condition` always exists but defaults every field to `"Not reported by
-source"` / grade `"N/A"` when absent (supercar, or HeyDealer until verified), rather
-than being optional everywhere. Check `data_origin` on a record (`"live"` vs `"mock"`,
-also shown as a badge on the vehicle detail page) to know which you're looking at.
+source"` / grade `"N/A"` when absent (supercar only now — Encar and HeyDealer both have
+real condition sources), rather than being optional everywhere. Check `data_origin` on
+a record (`"live"` vs `"mock"`, also shown as a badge on the vehicle detail page) to
+know which you're looking at.
 
 Caching: successful live fetches (listing pages and catalog pages alike) are cached
 in-process for 6h per PRD §8, with concurrent identical requests deduped to a single

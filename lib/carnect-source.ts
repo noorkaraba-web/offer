@@ -101,12 +101,29 @@ function detailUrl(listingId: string): string {
   return `${BASE_URL}/car/${listingId}`;
 }
 
-/** Given a raw search-box value or a catalog href, work out {listingId, source}. */
+/**
+ * Given a raw search-box value or a catalog href, work out {listingId, source}.
+ *
+ * Confirmed URL scheme: encar `/car/{numericId}`, supercar
+ * `/car/supercar/{id}`, heydealer `/car/heydealer/{id}` (heydealer IDs are
+ * short, mixed-case alphanumeric — e.g. "lG22apbQ" — never numeric).
+ *
+ * A bare ID with no prefix used to default to encar unconditionally, which
+ * built the wrong URL for a bare HeyDealer ID (a real listing 404ing looked
+ * exactly like "HeyDealer can't be looked up at all"). Now: purely numeric
+ * → encar (unambiguous, that's the only source with numeric IDs); anything
+ * else bare → assumed HeyDealer, since that's the only *other* source whose
+ * IDs staff would plausibly type without a prefix — a bare supercar ID is
+ * inherently ambiguous with this scheme (staff always get a supercar ID
+ * from a URL that already includes the "supercar/" segment, so this
+ * shouldn't come up in practice).
+ */
 export function parseListingId(raw: string): { listingId: string; source: Source } {
   const cleaned = raw.replace(/^\/car\//, "").replace(/\?.*$/, "");
   if (cleaned.startsWith("heydealer/")) return { listingId: cleaned, source: "heydealer" };
   if (cleaned.startsWith("supercar/")) return { listingId: cleaned, source: "supercar" };
-  return { listingId: cleaned, source: "encar" };
+  if (/^\d+$/.test(cleaned)) return { listingId: cleaned, source: "encar" };
+  return { listingId: `heydealer/${cleaned}`, source: "heydealer" };
 }
 
 interface JsonLdVehicle {
@@ -268,6 +285,63 @@ function extractEncarCondition(html: string): VehicleCondition | null {
   };
 }
 
+/**
+ * HeyDealer's condition data arrives differently from Encar's — as plain
+ * `ta-specs__cell` rows (Owner changes / This-car accidents / Counterpart
+ * accidents / Total loss / Flood damage / Theft records / Inspection valid
+ * until), not embedded JSON. Confirmed against a real listing (2023 Kia
+ * Carnival, /car/heydealer/lG22apbQ). No per-panel diagnosis is exposed on
+ * this template, so `panels` is always empty for HeyDealer.
+ */
+function buildHeydealerCondition(specs: Record<string, string>): VehicleCondition | null {
+  const myAccidents = digitsOnly(specs["this-car accidents"]);
+  const otherAccidents = digitsOnly(specs["counterpart accidents"]);
+  const totalLoss = digitsOnly(specs["total loss"]);
+  const floodLoss = digitsOnly(specs["flood damage"]);
+  const ownerChanges = digitsOnly(specs["owner changes"]);
+  const theft = digitsOnly(specs["theft records"]);
+
+  const hasAnyField =
+    myAccidents !== null || otherAccidents !== null || totalLoss !== null || floodLoss !== null || ownerChanges !== null;
+  if (!hasAnyField) return null; // Not this template — let the caller fall back.
+
+  const my = myAccidents ?? 0;
+  const other = otherAccidents ?? 0;
+  const tLoss = totalLoss ?? 0;
+  const fLoss = floodLoss ?? 0;
+  const stolen = theft ?? 0;
+
+  let insurance_record: string;
+  if (tLoss > 0 || fLoss > 0) {
+    insurance_record = `Total/flood loss on record (${tLoss} total loss, ${fLoss} flood)`;
+  } else if (stolen > 0) {
+    insurance_record = `Theft record on file (${stolen})`;
+  } else if (my === 0 && other === 0) {
+    insurance_record = "No accident on insurance record";
+  } else {
+    const parts: string[] = [];
+    if (my > 0) parts.push(`${my} accident(s), this owner at fault`);
+    if (other > 0) parts.push(`${other} accident(s), other party at fault`);
+    insurance_record = parts.join("; ");
+  }
+
+  let grade: VehicleCondition["grade"];
+  if (tLoss > 0 || fLoss > 0 || stolen > 0) grade = "C";
+  else if (my > 0 || other > 0) grade = "B";
+  else grade = "A";
+
+  return {
+    grade,
+    insurance_record,
+    diagnosis: "Not reported by source",
+    inspection: specs["inspection valid until"]
+      ? `Valid until ${specs["inspection valid until"]}`
+      : "Not reported by source",
+    owner_changes: ownerChanges ?? 0,
+    panels: [],
+  };
+}
+
 function extractPhotos(html: string): string[] {
   const seen = new Set<string>(); // dedupe by path, ignoring crop/query params
   const photos: string[] = [];
@@ -282,8 +356,11 @@ function extractPhotos(html: string): string[] {
   let m: RegExpExecArray | null;
   while ((m = apiImgRe.exec(html))) add(`${BASE_URL}${m[0]}`);
 
-  // Encar/HeyDealer's own CDN, embedded directly as real <img src> tags.
-  const directImgRe = /src="(https:\/\/img\.carnect\.biz\/[^"]+)"/g;
+  // Encar's CDN mirror and HeyDealer's own S3 bucket, both embedded
+  // directly as real <img src> tags (confirmed on real samples of each —
+  // HeyDealer does NOT go through /_next/image on its detail page, unlike
+  // its own catalog thumbnails).
+  const directImgRe = /src="(https:\/\/(?:img\.carnect\.biz|heydealer-api\.s3\.amazonaws\.com)\/[^"]+)"/g;
   while ((m = directImgRe.exec(html))) add(decodeEntities(m[1]));
 
   // Next/Image-proxied external photos (HeyDealer S3, catalog thumbnails).
@@ -350,7 +427,7 @@ function parseListingHtml(html: string, listingId: string, source: Source): Vehi
     digitsOnly(jsonLd?.vehicleModelDate ?? undefined) ??
     (Number(regDate.match(/\d{4}/)?.[0]) || 0);
 
-  const condition = extractEncarCondition(html) ?? {
+  const condition = extractEncarCondition(html) ?? buildHeydealerCondition(specs) ?? {
     grade: "N/A",
     insurance_record: "Not reported by source",
     diagnosis: "Not reported by source",
