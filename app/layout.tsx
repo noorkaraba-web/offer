@@ -1,0 +1,22 @@
+import type { Metadata } from "next";
+import "./globals.css";
+import { OfferDraftProvider } from "@/lib/offer-draft-context";
+import Header from "@/components/Header";
+
+export const metadata: Metadata = {
+  title: "Carnect Lookup & Offer Builder",
+  description: "Plate/listing lookup, price builder, and offer builder for Carnect staff.",
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en">
+      <body className="min-h-screen bg-[#f7f7f5] text-gray-900">
+        <OfferDraftProvider>
+          <Header />
+          <main className="mx-auto max-w-4xl px-4 pb-16 pt-6">{children}</main>
+        </OfferDraftProvider>
+      </body>
+    </html>
+  );
+}
