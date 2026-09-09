@@ -1,4 +1,4 @@
-import { Source, Vehicle, VehicleCondition } from "./types";
+import { DiagnosisPanel, PanelStatusCode, Source, Vehicle, VehicleCondition } from "./types";
 
 /**
  * Live fetcher for carnect.biz's own public pages, used in place of a
@@ -137,6 +137,64 @@ function extractJsonLdVehicle(html: string): JsonLdVehicle | null {
   return null;
 }
 
+// Encar's panel `name` field is usually an ALL_CAPS_ENUM like
+// FRONT_FENDER_LEFT. Mapped to what the reference UI shows; anything not in
+// this map falls back to a humanized version of the enum (or the raw value
+// verbatim if it isn't enum-shaped at all — e.g. already-Korean text, which
+// happens on real listings per a sample screenshot showing an untranslated
+// "라디에이터 서포트(볼트체결부위)" panel name).
+const PANEL_NAME_MAP: Record<string, string> = {
+  FRONT_FENDER_LEFT: "Front fender (L)",
+  FRONT_FENDER_RIGHT: "Front fender (R)",
+  FRONT_DOOR_LEFT: "Front door (L)",
+  FRONT_DOOR_RIGHT: "Front door (R)",
+  BACK_DOOR_LEFT: "Rear door (L)",
+  BACK_DOOR_RIGHT: "Rear door (R)",
+  TRUNK_LID: "Trunk lid",
+  HOOD: "Hood",
+  ROOF: "Roof",
+  QUARTER_PANEL_LEFT: "Quarter panel (L)",
+  QUARTER_PANEL_RIGHT: "Quarter panel (R)",
+  SIDE_SILL_PANEL_LEFT: "Side sill (L)",
+  SIDE_SILL_PANEL_RIGHT: "Side sill (R)",
+  PILLAR_PANEL_A_LEFT: "A-pillar (L)",
+  PILLAR_PANEL_A_RIGHT: "A-pillar (R)",
+  PILLAR_PANEL_B_LEFT: "B-pillar (L)",
+  PILLAR_PANEL_B_RIGHT: "B-pillar (R)",
+  PILLAR_PANEL_C_LEFT: "C-pillar (L)",
+  PILLAR_PANEL_C_RIGHT: "C-pillar (R)",
+  RADIATOR_SUPPORT: "Radiator support",
+  RAD_SUPPORT: "Radiator support",
+};
+
+function humanizePanelName(raw: string): string {
+  if (PANEL_NAME_MAP[raw]) return PANEL_NAME_MAP[raw];
+  if (!/^[A-Z0-9_]+$/.test(raw)) return raw; // Not enum-shaped (e.g. Korean) — show as-is.
+  return raw
+    .toLowerCase()
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+// Only "NORMAL" is confirmed against a real sample (a clean car with no
+// damage) — the rest are informed guesses at Encar's likely enum values,
+// matched against a reference screenshot showing "REPLACED" and
+// "WELDED / PANEL BEATEN" as displayed labels for a damaged car. Unmapped
+// codes fall back to the raw value rather than a wrong translation.
+const PANEL_STATUS_MAP: Record<string, PanelStatusCode> = {
+  NORMAL: "normal",
+  REPLACED: "replaced",
+  EXCHANGE: "replaced",
+  EXCHANGED: "replaced",
+  WELDED: "welded",
+  WELD: "welded",
+  PANEL_BEATEN: "welded",
+  SHEET_METAL: "welded",
+  CORROSION: "corrosion",
+  RUST: "corrosion",
+};
+
 /**
  * Encar's real inspection/insurance data arrives as an escaped JSON blob
  * inside the page's RSC payload (not as plain HTML), e.g.
@@ -170,11 +228,17 @@ function extractEncarCondition(html: string): VehicleCondition | null {
     insurance_record = parts.join("; ");
   }
 
-  const resultCodes = [...region.matchAll(/\\"resultCode\\":\\"([A-Z]+)\\"/g)].map((m) => m[1]);
+  const panelRe = /\\"name\\":\\"([^"\\]+)\\"[^}]*?\\"resultCode\\":\\"([^"\\]+)\\"/g;
+  const panels: DiagnosisPanel[] = [...region.matchAll(panelRe)].map(([, rawName, rawStatus]) => ({
+    name: humanizePanelName(rawName),
+    statusCode: PANEL_STATUS_MAP[rawStatus] ?? "unknown",
+    rawStatus,
+  }));
+
   const diagnosis =
-    resultCodes.length === 0
+    panels.length === 0
       ? "Not reported by source"
-      : `${resultCodes.filter((c) => c === "NORMAL").length}/${resultCodes.length} inspected panels normal`;
+      : `${panels.filter((p) => p.statusCode === "normal").length}/${panels.length} inspected panels normal`;
 
   const hasInspectionReport = /\\"supplyNo\\":\\"[^"\\]+\\"/.test(region);
 
@@ -189,6 +253,7 @@ function extractEncarCondition(html: string): VehicleCondition | null {
     diagnosis,
     inspection: hasInspectionReport ? "Inspection report available" : "Not reported by source",
     owner_changes: ownerChanges,
+    panels,
   };
 }
 
@@ -280,6 +345,7 @@ function parseListingHtml(html: string, listingId: string, source: Source): Vehi
     diagnosis: "Not reported by source",
     inspection: "Not reported by source",
     owner_changes: 0,
+    panels: [],
   };
 
   return {

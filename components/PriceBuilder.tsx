@@ -56,8 +56,8 @@ export default function PriceBuilder({ vehicle }: { vehicle: Vehicle }) {
   }
 
   return (
-    <div className="rounded-xl bg-white p-4 shadow-sm">
-      <h3 className="mb-3 text-sm font-semibold text-gray-900">Price builder</h3>
+    <div className="rounded-xl border border-navy-border bg-navy-surface p-4">
+      <h3 className="mb-3 text-sm font-semibold text-navy-text">Offer price builder</h3>
 
       <div className="grid grid-cols-2 gap-3">
         <NumberField label="Vehicle price (KRW)" value={priceKrw} onChange={setPriceKrw} />
@@ -68,12 +68,12 @@ export default function PriceBuilder({ vehicle }: { vehicle: Vehicle }) {
 
       <div className="mt-4 grid grid-cols-2 gap-3">
         <div>
-          <label className="text-xs uppercase tracking-wide text-gray-500">Destination port</label>
+          <label className="text-xs uppercase tracking-wide text-navy-muted">Destination port</label>
           <input
             value={destinationPort}
             onChange={(e) => setDestinationPort(e.target.value)}
             placeholder="Optional"
-            className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+            className="mt-1 w-full rounded-md border border-navy-border bg-navy-surface2 px-2 py-1.5 text-sm text-navy-text"
           />
         </div>
         <NumberField label="Freight (USD)" value={freightUsd} onChange={setFreightUsd} />
@@ -83,7 +83,7 @@ export default function PriceBuilder({ vehicle }: { vehicle: Vehicle }) {
         <select
           value={currency}
           onChange={(e) => setCurrency(e.target.value as Currency)}
-          className="rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+          className="rounded-md border border-navy-border bg-navy-surface2 px-2 py-1.5 text-sm text-navy-text"
         >
           {CURRENCIES.map((c) => (
             <option key={c} value={c}>
@@ -91,7 +91,7 @@ export default function PriceBuilder({ vehicle }: { vehicle: Vehicle }) {
             </option>
           ))}
         </select>
-        <label className="flex items-center gap-2 text-sm text-gray-600">
+        <label className="flex items-center gap-2 text-sm text-navy-muted">
           <input
             type="checkbox"
             checked={showBreakdown}
@@ -101,13 +101,13 @@ export default function PriceBuilder({ vehicle }: { vehicle: Vehicle }) {
         </label>
       </div>
 
-      <div className="mt-4 rounded-lg bg-carnect/5 p-3">
-        {!rates && !rateError && <p className="text-sm text-gray-500">Loading FX rates…</p>}
-        {rateError && <p className="text-sm text-red-600">FX rates unavailable — try again shortly.</p>}
+      <div className="mt-4 rounded-lg bg-navy-surface2 p-3">
+        {!rates && !rateError && <p className="text-sm text-navy-muted">Loading FX rates…</p>}
+        {rateError && <p className="text-sm text-red-400">FX rates unavailable — try again shortly.</p>}
         {pricing && (
           <>
             {showBreakdown && (
-              <ul className="mb-2 space-y-1 text-xs text-gray-600">
+              <ul className="mb-2 space-y-1 text-xs text-navy-muted">
                 <li>Vehicle: {formatMoney((priceKrw) * (rates!.rates[currency]), currency)}</li>
                 <li>Auction fee: {formatMoney(auctionFee * rates!.rates[currency], currency)}</li>
                 <li>Carnect fee: {formatMoney(carnectFee * rates!.rates[currency], currency)}</li>
@@ -117,7 +117,7 @@ export default function PriceBuilder({ vehicle }: { vehicle: Vehicle }) {
                 )}
               </ul>
             )}
-            <p className="text-lg font-bold text-carnect">
+            <p className="text-lg font-bold text-navy-text">
               FOB: {formatMoney(pricing.fob_display, currency)}
             </p>
             {pricing.cfr_display !== null && (
@@ -144,7 +144,7 @@ export default function PriceBuilder({ vehicle }: { vehicle: Vehicle }) {
       {added && (
         <button
           onClick={() => removeItem(vehicle.listing_id)}
-          className="mt-2 w-full rounded-lg border border-gray-300 py-2 text-sm text-gray-600"
+          className="mt-2 w-full rounded-lg border border-navy-border py-2 text-sm text-navy-muted"
         >
           Remove from offer
         </button>
@@ -164,12 +164,12 @@ function NumberField({
 }) {
   return (
     <div>
-      <label className="text-xs uppercase tracking-wide text-gray-500">{label}</label>
+      <label className="text-xs uppercase tracking-wide text-navy-muted">{label}</label>
       <input
         type="number"
         value={value}
         onChange={(e) => onChange(Number(e.target.value) || 0)}
-        className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+        className="mt-1 w-full rounded-md border border-navy-border bg-navy-surface2 px-2 py-1.5 text-sm text-navy-text"
       />
     </div>
   );

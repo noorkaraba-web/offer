@@ -1,10 +1,11 @@
 import { notFound } from "next/navigation";
 import { findByListingId } from "@/lib/data";
 import PhotoGallery from "@/components/PhotoGallery";
+import VehicleHeader from "@/components/VehicleHeader";
 import SpecGrid from "@/components/SpecGrid";
-import ConditionBlock from "@/components/ConditionBlock";
+import ConditionAccidentBlock from "@/components/ConditionAccidentBlock";
 import PriceBuilder from "@/components/PriceBuilder";
-import ShareBlock from "@/components/ShareBlock";
+import ShareToWhatsAppBlock from "@/components/ShareToWhatsAppBlock";
 
 const SOURCE_LABEL: Record<string, string> = {
   encar: "Encar",
@@ -24,23 +25,27 @@ export default async function VehicleDetailPage({
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-xl font-bold text-gray-900">{vehicle.title_en}</h1>
-        <p className="text-sm text-gray-500">
-          {SOURCE_LABEL[vehicle.source] ?? vehicle.source} · {vehicle.listing_id}
-          {vehicle.plate ? ` · Plate ${vehicle.plate}` : ""}
-          {" · "}
-          <span className={vehicle.data_origin === "live" ? "text-emerald-600" : "text-amber-600"}>
-            {vehicle.data_origin === "live" ? "Live from carnect.biz" : "Mock data (live fetch fell back)"}
-          </span>
-        </p>
+      <p className="text-xs text-navy-muted">
+        {SOURCE_LABEL[vehicle.source] ?? vehicle.source} · {vehicle.listing_id}
+        {" · "}
+        <span className={vehicle.data_origin === "live" ? "text-emerald-400" : "text-amber-400"}>
+          {vehicle.data_origin === "live" ? "Live from carnect.biz" : "Mock data (live fetch fell back)"}
+        </span>
+      </p>
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+        <div className="lg:col-span-3">
+          <PhotoGallery photos={vehicle.photos} alt={vehicle.title_en} />
+        </div>
+        <div className="lg:col-span-2">
+          <VehicleHeader vehicle={vehicle} />
+        </div>
       </div>
 
-      <PhotoGallery photos={vehicle.photos} alt={vehicle.title_en} />
-      <SpecGrid vehicle={vehicle} />
-      <ConditionBlock condition={vehicle.condition} />
+      <ConditionAccidentBlock condition={vehicle.condition} />
+      <ShareToWhatsAppBlock vehicle={vehicle} />
       <PriceBuilder vehicle={vehicle} />
-      <ShareBlock vehicle={vehicle} />
+      <SpecGrid vehicle={vehicle} />
     </div>
   );
 }

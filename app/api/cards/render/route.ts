@@ -6,6 +6,9 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const id = body?.listing_id ?? body?.id;
   const source = body?.source;
+  const lang = body?.lang;
+  const currency = body?.currency;
+  const landedPrice = body?.landed_price;
 
   if (!id) {
     return NextResponse.json({ error: "listing_id is required" }, { status: 400 });
@@ -15,7 +18,13 @@ export async function POST(req: NextRequest) {
   }
 
   const origin = req.nextUrl.origin;
-  const qs = new URLSearchParams({ id, ...(source ? { source } : {}) }).toString();
+  const qs = new URLSearchParams({
+    id,
+    ...(source ? { source } : {}),
+    ...(lang ? { lang } : {}),
+    ...(currency ? { currency } : {}),
+    ...(landedPrice != null ? { landedPrice: String(landedPrice) } : {}),
+  }).toString();
 
   return NextResponse.json({
     vehicle_card_url: `${origin}/api/cards/vehicle?${qs}`,
