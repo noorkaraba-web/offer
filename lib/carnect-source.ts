@@ -177,17 +177,24 @@ function humanizePanelName(raw: string): string {
     .join(" ");
 }
 
-// Only "NORMAL" is confirmed against a real sample (a clean car with no
-// damage) — the rest are informed guesses at Encar's likely enum values,
-// matched against a reference screenshot showing "REPLACED" and
-// "WELDED / PANEL BEATEN" as displayed labels for a damaged car. Unmapped
-// codes fall back to the raw value rather than a wrong translation.
+// "NORMAL" and "REPLACEMENT" are confirmed against real samples (a clean
+// car and a damaged one — 2 replaced panels: HOOD, FRONT_FENDER_LEFT).
+// Note the confirmed code is "REPLACEMENT", not "REPLACED" as originally
+// guessed — kept below as an alias in case a different endpoint/version
+// uses that form. WELDED/CORROSION remain unconfirmed guesses (this
+// sample's damage was replacement-only, no welded or corroded panels to
+// check against) — matched to a reference screenshot's displayed
+// "WELDED / PANEL BEATEN" label, but the underlying Encar enum value is
+// still unverified. Unmapped codes fall back to the raw value rather than
+// a wrong translation.
 const PANEL_STATUS_MAP: Record<string, PanelStatusCode> = {
   NORMAL: "normal",
+  REPLACEMENT: "replaced",
   REPLACED: "replaced",
   EXCHANGE: "replaced",
   EXCHANGED: "replaced",
   WELDED: "welded",
+  WELDING: "welded",
   WELD: "welded",
   PANEL_BEATEN: "welded",
   SHEET_METAL: "welded",
@@ -240,7 +247,11 @@ function extractEncarCondition(html: string): VehicleCondition | null {
       ? "Not reported by source"
       : `${panels.filter((p) => p.statusCode === "normal").length}/${panels.length} inspected panels normal`;
 
-  const hasInspectionReport = /\\"supplyNo\\":\\"[^"\\]+\\"/.test(region);
+  // Searched against the full page, not the bounded `region` above: unlike
+  // diagnosis/insurance (which sit close together), `inspection.master.supplyNo`
+  // can be tens of KB away from the insurance block (confirmed on a real
+  // sample), so a bounded window misses it.
+  const hasInspectionReport = /\\"supplyNo\\":\\"[^"\\]+\\"/.test(html);
 
   let grade: VehicleCondition["grade"];
   if (totalLoss > 0 || floodLoss > 0) grade = "C";

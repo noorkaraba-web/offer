@@ -199,11 +199,17 @@ languages isn't something a static key/value dictionary can do. They render in E
 regardless of card language; only the surrounding labels and panel *status* words
 (Normal/Replaced/Welded/Corrosion — a small fixed vocabulary) are translated.
 
-**Panel status codes**: `NORMAL` is confirmed against a real (undamaged) car. The
-`REPLACED` / `WELDED` (→ "Welded / panel beaten") / `CORROSION` mappings in
-`PANEL_STATUS_MAP` (`lib/carnect-source.ts`) are informed guesses matched against your
-reference screenshot's displayed labels for a *different*, damaged car — I don't have
-a raw HTML sample with actual damage to confirm the underlying Encar codes against.
-Any code that doesn't match falls back to showing the raw value rather than a
-possibly-wrong translation, so nothing is silently mislabeled — but if you can send me
-one damaged-car listing's HTML, I can verify/correct these precisely.
+**Panel status codes** — updated against a real damaged-car sample (2020 Kia Sportage,
+`/car/41636435`, 2 replaced panels): `NORMAL` and **`REPLACEMENT`** are now confirmed.
+Note the real code is `REPLACEMENT`, not `REPLACED` as originally guessed — fixed in
+`PANEL_STATUS_MAP` (`lib/carnect-source.ts`), with `REPLACED` kept as an alias in case
+another endpoint/version uses that form. `WELDED`/`CORROSION` are still unconfirmed —
+this sample's damage was replacement-only, no welded or corroded panels to check
+against. Any code that doesn't match falls back to showing the raw value rather than a
+possibly-wrong translation, so nothing is silently mislabeled.
+
+Also fixed from the same sample: `condition.inspection` ("Inspection report available")
+was checked against a too-narrow window around the `insurance` JSON key —
+`inspection.master.supplyNo` turned out to sit ~15KB earlier in the page on this
+listing (vs. a few hundred bytes on the first sample I had), so the bounded-window
+search was missing it. Now checked against the full page.
