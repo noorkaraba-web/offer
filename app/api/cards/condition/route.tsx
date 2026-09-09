@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   const source = searchParams.get("source") ?? undefined;
   if (!id) return new Response("id is required", { status: 400 });
 
-  const vehicle = findByListingId(id, source);
+  const vehicle = await findByListingId(id, source);
   if (!vehicle) return new Response("not found", { status: 404 });
 
   const rows: [string, string][] = [
@@ -50,7 +50,9 @@ export async function GET(req: NextRequest) {
                 ? "#15533e"
                 : vehicle.condition.grade === "B"
                 ? "#d9a441"
-                : "#a83232",
+                : vehicle.condition.grade === "C"
+                ? "#a83232"
+                : "#8a8a8a",
             borderRadius: 12,
             padding: "8px 20px",
             width: "fit-content",

@@ -20,31 +20,72 @@ npm run dev
 
 Then open `http://localhost:3000`.
 
-> **This code was written but not run or type-checked in the sandbox that produced
-> it** — outbound access to the npm registry was blocked there (`403` from
-> `registry.npmjs.org` on every request), so `npm install` could not complete and no
-> dev server could be started. I did statically parse every `.ts`/`.tsx` file with the
-> TypeScript compiler to catch syntax errors (none found; the only diagnostics were
-> "missing type package" noise from the absent `node_modules`), and I reviewed the app
-> end-to-end by hand, but I have not seen it render in a browser. Please run `npm
-> install && npm run dev` and click through the flows before treating this as
-> shippable — start with: search → vehicle detail → price builder → add to offer →
-> generate offer → open the public offer link.
+> **This app was written but never run as a Next.js dev server in the sandbox that
+> produced it** — outbound access to the npm registry is blocked there, so `npm
+> install` can't complete. I did statically parse every `.ts`/`.tsx` file with the
+> TypeScript compiler to catch syntax errors (none found), and separately
+> unit-tested `lib/carnect-source.ts` — the live carnect.biz fetcher — by transpiling
+> it and feeding it real page HTML you provided (with `fetch` mocked), which confirmed
+> it correctly parses the real supercar listing end-to-end and degrades safely (returns
+> `null` → mock fallback) when the HTML doesn't match what it expects. What's *not*
+> verified is the full Next.js app actually running — routing, rendering, the browser
+> flows. Please run `npm install && npm run dev` and click through: search → vehicle
+> detail → price builder → add to offer → generate offer → open the public offer link.
 
-## What's mocked vs. real
+## Data source: live from carnect.biz, mock as fallback
 
-There is no existing Carnect app or crawler DB in this repository (it was empty), so:
+There's no crawler DB or dev access yet, and carnect.biz's public pages don't expose a
+JSON API — so `lib/carnect-source.ts` fetches and parses the live HTML pages directly,
+the same way a browser would render them, and `lib/data.ts` falls back to the mock seed
+in `VEHICLES` whenever that fails (network error, page structure doesn't match, listing
+genuinely doesn't exist). `findByListingId`/`findByPlate` are async now for this reason
+— every call site already awaits them.
 
-- **`lib/data.ts`** is a 6-car seed dataset shaped exactly like PRD §7's JSON schema,
-  standing in for the crawler DB. Photos are placeholder images (`picsum.photos`) since
-  there's no real Carnect CDN to proxy.
-- **§6 (the plate-lookup dependency):** every seed record carries a `plate` field, so
-  plate search works end-to-end against this dataset — that's Option A from the PRD,
-  demonstrated on mock data. Wiring it to production data means: confirm the crawler's
-  raw payload actually captures `car_no` / 차량번호 (§6's "action before dev starts"),
-  then point `findByPlate`/`findByListingId` in `lib/data.ts` at a real query against
-  that DB instead of the in-memory array. Nothing else in the app needs to change —
-  `/api/lookup` and every screen just call those two functions.
+**Confirmed working**, verified against real page dumps (not guessed):
+- `supercar` listing pages (`/car/supercar/{id}`) — brand, model, year, USD + KRW
+  price, 7 specs, full photo gallery. Fully parsed.
+- Catalog pages (`/catalog`, `/catalog?tab=encar`) — card-level brand/model, year,
+  mileage, fuel, reg. date, price (Encar shows USD + KRW; HeyDealer often shows "Price
+  on request" instead). Used internally for the plate-search fallback below.
+- Real image hosts: `img.carnect.biz` (Encar), `heydealer-api.s3.amazonaws.com`
+  (HeyDealer), `carnect.biz/api/images/...` (Supercar) — all in `next.config.js`.
+
+**Best-effort, NOT verified** — I don't have a real Encar or HeyDealer *listing detail*
+page to test against, only their catalog (list) pages:
+- `parseListingHtml` in `lib/carnect-source.ts` reuses the same `ta-specs`/`ta-price`
+  selectors confirmed on the supercar template, since the site's `ta-`/`cd-`-prefixed
+  classes look like a shared design system. If a real Encar/HeyDealer page doesn't
+  match, the parser returns `null` and the mock fallback kicks in silently — it never
+  ships a garbled record, but it also means listing-ID lookup for those two sources may
+  just be running on mock data right now. **Send me one real listing detail page HTML
+  (e.g. `curl https://carnect.biz/car/41733697`) and I'll verify/fix this properly.**
+- Brand/model splitting for non-supercar listings relies on a heuristic (a
+  `<!-- --> <!-- -->` marker Next.js emits between two adjacent JSX text values,
+  observed on catalog cards) that may or may not appear the same way on a detail page.
+  Worst case, `brand` is empty and the full name lands in `model` — `title_en` is
+  always correct either way.
+- **Plate lookup**: the catalog page has a real "License plate" search box (Encar tab
+  only), so carnect.biz *can* resolve plates — but it's wired to client JS with no
+  visible request in the static HTML. `fetchLiveByPlate` guesses
+  `/catalog?tab=encar&plate={value}` (matching our own API's `?plate=` naming) and
+  parses whatever comes back; zero results falls back to the mock plate lookup. If you
+  can grab the real network request (open that search box in devtools, search a real
+  plate, copy the request URL), I'll wire it precisely.
+- `condition` (insurance/accident/diagnosis/inspection/owner changes) and `vin` never
+  appeared on the one detail page confirmed (supercar) at all — plausibly because
+  that's Carnect's own curated inventory, not Encar-sourced. `Vehicle.condition` always
+  exists but defaults every field to `"Not reported by source"` / grade `"N/A"` when
+  absent, rather than being optional everywhere — check `data_origin` on a record
+  (`"live"` vs `"mock"`, also shown as a badge on the vehicle detail page) before
+  reading too much into a blank condition block.
+
+Caching: successful live fetches (listing pages and catalog pages alike) are cached
+in-process for 6h per PRD §8, with concurrent identical requests deduped to a single
+in-flight fetch — so a burst of clicks doesn't fan out into a burst of hits on
+carnect.biz. Like the offer store, this cache is a plain in-memory `Map`, fine for a
+single running process/dev server but not guaranteed to survive Vercel's serverless
+cold starts.
+
 - **`lib/store.ts`** (offers) is an in-memory `Map`, enough for local dev and a single
   running process, but it will not survive across serverless cold starts on Vercel.
   Production needs offers backed by "the same DB as the Carnect crawler" (PRD §12) —
@@ -79,8 +120,10 @@ themselves are served by `GET /api/cards/vehicle` and `GET /api/cards/condition`
 
 ## Open questions from PRD §13 — defaults taken for v1
 
-1. Plate field in crawler data — not answerable from this repo; §6 above covers what
-   changes once it's confirmed.
+1. Plate field in crawler data — not directly answerable (no crawler DB access), but
+   carnect.biz's own catalog page has a working plate-search box, so the backend
+   clearly resolves plates → Encar listings already. See "Data source" above for what's
+   wired vs. still a guess.
 2. Offer page shows the FOB/CFR breakdown by default, with a per-car toggle
    (`show_breakdown` on each offer item, set from the price builder) — easy to flip the
    default once there's a real answer.

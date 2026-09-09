@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const vehicle = plate ? findByPlate(plate) : findByListingId(id!, source);
+  const vehicle = plate ? await findByPlate(plate) : await findByListingId(id!, source);
 
   if (!vehicle) {
     return NextResponse.json(

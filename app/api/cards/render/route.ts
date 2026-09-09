@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
   if (!id) {
     return NextResponse.json({ error: "listing_id is required" }, { status: 400 });
   }
-  if (!findByListingId(id, source)) {
+  if (!(await findByListingId(id, source))) {
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 

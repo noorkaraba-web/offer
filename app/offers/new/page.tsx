@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { findByListingId } from "@/lib/data";
 import { useOfferDraft, OFFER_DRAFT_MAX_ITEMS } from "@/lib/offer-draft-context";
 import { Currency } from "@/lib/types";
 
@@ -93,23 +92,20 @@ export default function OfferDraftPage() {
         </div>
       ) : (
         <ul className="space-y-2">
-          {draft.items.map((item) => {
-            const vehicle = findByListingId(item.listing_id, item.source);
-            return (
-              <li key={item.listing_id} className="flex items-center justify-between rounded-xl bg-white p-3 shadow-sm">
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{vehicle?.title_en ?? item.listing_id}</p>
-                  <p className="text-xs text-gray-500">₩{item.price_krw.toLocaleString("en-US")} base</p>
-                </div>
-                <button
-                  onClick={() => draft.removeItem(item.listing_id)}
-                  className="text-xs font-medium text-red-600"
-                >
-                  Remove
-                </button>
-              </li>
-            );
-          })}
+          {draft.items.map((item) => (
+            <li key={item.listing_id} className="flex items-center justify-between rounded-xl bg-white p-3 shadow-sm">
+              <div>
+                <p className="text-sm font-medium text-gray-900">{item.title_en}</p>
+                <p className="text-xs text-gray-500">₩{item.price_krw.toLocaleString("en-US")} base</p>
+              </div>
+              <button
+                onClick={() => draft.removeItem(item.listing_id)}
+                className="text-xs font-medium text-red-600"
+              >
+                Remove
+              </button>
+            </li>
+          ))}
         </ul>
       )}
 

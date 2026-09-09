@@ -17,7 +17,7 @@ export default async function OfferPublicPage({ params }: { params: { slug: stri
 
   const items: { item: OfferItem; vehicle: Vehicle }[] = [];
   for (const item of offer.items) {
-    const vehicle = findByListingId(item.listing_id, item.source);
+    const vehicle = await findByListingId(item.listing_id, item.source);
     if (vehicle) items.push({ item, vehicle });
   }
 

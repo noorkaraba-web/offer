@@ -42,7 +42,7 @@ export async function GET(
   cover.drawText(`${offer.items.length} vehicle(s)`, { x: 50, y, size: 14, font });
 
   for (const item of offer.items) {
-    const vehicle = findByListingId(item.listing_id);
+    const vehicle = await findByListingId(item.listing_id, item.source);
     if (!vehicle) continue;
 
     const page = pdf.addPage([595, 842]);

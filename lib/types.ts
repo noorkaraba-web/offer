@@ -1,6 +1,6 @@
-export type Source = "encar" | "heydealer";
+export type Source = "encar" | "heydealer" | "supercar";
 
-export type ConditionGrade = "A" | "B" | "C";
+export type ConditionGrade = "A" | "B" | "C" | "N/A";
 
 export interface VehicleCondition {
   grade: ConditionGrade;
@@ -14,7 +14,8 @@ export interface Vehicle {
   listing_id: string;
   source: Source;
   plate: string | null;
-  vin: string;
+  vin: string | null;
+  seats: number | null;
   url: string;
   title_en: string;
   brand: string;
@@ -25,14 +26,15 @@ export interface Vehicle {
   mileage_km: number;
   fuel: string;
   transmission: string;
-  engine_cc: number;
+  engine_cc: number | null;
   color: string;
   body: string;
-  seats: number;
   price_krw: number;
   photos: string[];
   condition: VehicleCondition;
   updated_at: string;
+  /** Where this record actually came from — surfaced in the UI so staff can tell live data from the mock fallback. */
+  data_origin: "live" | "mock";
 }
 
 export type Currency = "USD" | "EUR" | "AED" | "KRW" | "JPY" | "GBP" | "CAD" | "AUD";
@@ -40,6 +42,7 @@ export type Currency = "USD" | "EUR" | "AED" | "KRW" | "JPY" | "GBP" | "CAD" | "
 export interface OfferItem {
   listing_id: string;
   source: Source;
+  title_en: string;
   price_krw: number;
   auction_fee_krw: number;
   carnect_fee_krw: number;

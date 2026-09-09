@@ -11,11 +11,12 @@ export async function GET(req: NextRequest) {
   const source = searchParams.get("source") ?? undefined;
   if (!id) return new Response("id is required", { status: 400 });
 
-  const vehicle = findByListingId(id, source);
+  const vehicle = await findByListingId(id, source);
   if (!vehicle) return new Response("not found", { status: 404 });
 
   const mileage = vehicle.mileage_km.toLocaleString("en-US");
   const price = vehicle.price_krw.toLocaleString("en-US");
+  const heroPhoto = vehicle.photos[0] ?? "https://picsum.photos/seed/no-photo/1200/480";
 
   return new ImageResponse(
     (
@@ -32,7 +33,7 @@ export async function GET(req: NextRequest) {
         <div style={{ display: "flex", flex: 1 }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={vehicle.photos[0]}
+            src={heroPhoto}
             width={1200}
             height={480}
             style={{ objectFit: "cover" }}

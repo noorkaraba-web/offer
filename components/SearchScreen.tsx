@@ -111,11 +111,14 @@ export default function SearchScreen({
       )}
 
       <div className="grid grid-cols-4 gap-2 text-center">
-        <Stat label="Indexed" value={indexCounters.total} />
-        <Stat label="With plate" value={indexCounters.withPlate} />
-        <Stat label="Encar" value={indexCounters.encar} />
-        <Stat label="HeyDealer" value={indexCounters.heydealer} />
+        <Stat label="Mock fallback" value={indexCounters.total} />
+        <Stat label="With mock plate" value={indexCounters.withPlate} />
+        <Stat label="Encar (mock)" value={indexCounters.encar} />
+        <Stat label="HeyDealer (mock)" value={indexCounters.heydealer} />
       </div>
+      <p className="-mt-4 text-xs text-gray-400">
+        Lookups try carnect.biz live first; these counts are only the local mock fallback.
+      </p>
 
       {recent.length > 0 && (
         <div>

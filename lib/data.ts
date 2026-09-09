@@ -1,11 +1,11 @@
 import { Vehicle } from "./types";
+import { fetchLiveByListingId, fetchLiveByPlate } from "./carnect-source";
 
 /**
- * Mock seed data standing in for the Carnect crawler DB.
- * Resolves §6 Option A for this dataset: `plate` is present on every record,
- * so plate search works end-to-end here. Wiring this to the real crawler
- * output just means confirming `car_no` / 차량번호 is captured on ingest and
- * swapping this module for a real DB query (see README).
+ * Mock seed data — the fallback when a live fetch from carnect.biz fails
+ * (network error, the page's markup no longer matches the parser, listing
+ * genuinely doesn't exist, etc). See lib/carnect-source.ts for the real
+ * fetcher and README for what's confirmed-working vs. best-effort.
  */
 export const VEHICLES: Vehicle[] = [
   {
@@ -42,6 +42,7 @@ export const VEHICLES: Vehicle[] = [
       owner_changes: 1,
     },
     updated_at: "2026-09-09T10:00:00Z",
+    data_origin: "mock",
   },
   {
     listing_id: "heydealer/Q4rVYVwy",
@@ -76,6 +77,7 @@ export const VEHICLES: Vehicle[] = [
       owner_changes: 1,
     },
     updated_at: "2026-09-08T06:30:00Z",
+    data_origin: "mock",
   },
   {
     listing_id: "41298104",
@@ -109,6 +111,7 @@ export const VEHICLES: Vehicle[] = [
       owner_changes: 2,
     },
     updated_at: "2026-09-07T14:12:00Z",
+    data_origin: "mock",
   },
   {
     listing_id: "heydealer/8mKpLr2Q",
@@ -143,6 +146,7 @@ export const VEHICLES: Vehicle[] = [
       owner_changes: 1,
     },
     updated_at: "2026-09-09T03:45:00Z",
+    data_origin: "mock",
   },
   {
     listing_id: "40987321",
@@ -176,6 +180,7 @@ export const VEHICLES: Vehicle[] = [
       owner_changes: 1,
     },
     updated_at: "2026-09-06T09:00:00Z",
+    data_origin: "mock",
   },
   {
     listing_id: "heydealer/nT7wZzX1",
@@ -209,18 +214,38 @@ export const VEHICLES: Vehicle[] = [
       owner_changes: 1,
     },
     updated_at: "2026-09-09T01:20:00Z",
+    data_origin: "mock",
   },
 ];
 
-export function findByListingId(listingId: string, source?: string): Vehicle | undefined {
+export function findMockByListingId(listingId: string, source?: string): Vehicle | undefined {
   return VEHICLES.find(
     (v) => v.listing_id === listingId && (!source || v.source === source)
   );
 }
 
-export function findByPlate(plate: string): Vehicle | undefined {
+export function findMockByPlate(plate: string): Vehicle | undefined {
   const normalized = normalizePlate(plate);
   return VEHICLES.find((v) => v.plate && normalizePlate(v.plate) === normalized);
+}
+
+/**
+ * Resolve a listing ID against the real carnect.biz site, falling back to
+ * the mock seed above if the live fetch fails for any reason. This is the
+ * function every route/page should call.
+ */
+export async function findByListingId(listingId: string, source?: string): Promise<Vehicle | undefined> {
+  const live = await fetchLiveByListingId(listingId, source).catch(() => null);
+  return live ?? findMockByListingId(listingId, source);
+}
+
+/**
+ * Resolve a Korean plate against carnect.biz's own (unverified — see
+ * README) plate search, falling back to the mock seed if that fails.
+ */
+export async function findByPlate(plate: string): Promise<Vehicle | undefined> {
+  const live = await fetchLiveByPlate(plate).catch(() => null);
+  return live ?? findMockByPlate(plate);
 }
 
 export function normalizePlate(plate: string): string {

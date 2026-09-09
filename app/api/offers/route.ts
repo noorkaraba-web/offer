@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
 
   const items: OfferItem[] = [];
   for (const raw of body.items) {
-    const vehicle = findByListingId(raw.listing_id, raw.source);
+    const vehicle = await findByListingId(raw.listing_id, raw.source);
     if (!vehicle) {
       return NextResponse.json(
         { error: `unknown listing_id: ${raw.listing_id}` },
@@ -37,6 +37,7 @@ export async function POST(req: NextRequest) {
     items.push({
       listing_id: vehicle.listing_id,
       source: vehicle.source,
+      title_en: raw.title_en || vehicle.title_en,
       price_krw: Number(raw.price_krw ?? vehicle.price_krw),
       auction_fee_krw: Number(raw.auction_fee_krw ?? 0),
       carnect_fee_krw: Number(raw.carnect_fee_krw ?? 0),

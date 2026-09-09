@@ -45,6 +45,7 @@ export default function PriceBuilder({ vehicle }: { vehicle: Vehicle }) {
     return {
       listing_id: vehicle.listing_id,
       source: vehicle.source,
+      title_en: vehicle.title_en,
       price_krw: priceKrw,
       auction_fee_krw: auctionFee,
       carnect_fee_krw: carnectFee,

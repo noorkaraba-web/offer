@@ -7,11 +7,11 @@ export default function SpecGrid({ vehicle }: { vehicle: Vehicle }) {
     ["Mileage", `${vehicle.mileage_km.toLocaleString("en-US")} km`],
     ["Fuel", vehicle.fuel],
     ["Transmission", vehicle.transmission],
-    ["Engine", `${vehicle.engine_cc.toLocaleString("en-US")} cc`],
+    ...(vehicle.engine_cc != null ? ([["Engine", `${vehicle.engine_cc.toLocaleString("en-US")} cc`]] as [string, string][]) : []),
     ["Color", vehicle.color],
     ["Body", vehicle.body],
-    ["Seats", String(vehicle.seats)],
-    ["VIN", vehicle.vin],
+    ...(vehicle.seats != null ? ([["Seats", String(vehicle.seats)]] as [string, string][]) : []),
+    ...(vehicle.vin ? ([["VIN", vehicle.vin]] as [string, string][]) : []),
   ];
 
   return (

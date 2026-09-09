@@ -14,10 +14,12 @@ export async function GET(
 
   recordView(params.id);
 
-  const items = offer.items.map((item) => ({
-    ...item,
-    vehicle: findByListingId(item.listing_id),
-  }));
+  const items = await Promise.all(
+    offer.items.map(async (item) => ({
+      ...item,
+      vehicle: await findByListingId(item.listing_id, item.source),
+    }))
+  );
 
   return NextResponse.json({
     ...offer,
