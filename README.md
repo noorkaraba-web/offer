@@ -174,10 +174,10 @@ destination country, and offer view notifications.
 Reworked to match the reference screenshots: dark navy theme, yellow plate badge,
 KRW-primary price with USD/EUR underneath, a full photo grid (not a scroll strip), a
 "Condition & accident history" block (structural-damage warning + per-panel status
-chips + a grade/insurance/diagnosis/inspection summary row), and a new "Share to
-WhatsApp" block (language picker, currency + landed-price input, generates two cards).
-The old fee-breakdown price builder (for the multi-car Offer Builder — a different
-PRD flow) is still there, just restyled and moved below the new share block.
+chips + a grade/insurance/diagnosis/inspection summary row), and a "Share to
+WhatsApp" block (language picker, currency selector, generates two cards). The
+original fee-breakdown price builder was later replaced outright by the Deal
+Calculator port — see "Deal calculator port" below.
 
 **The font bug, fixed first as asked:** "Failed to load dynamic font" happens because
 `next/og`'s `ImageResponse`, given no explicit `fonts`, tries to resolve non-Latin
@@ -208,13 +208,9 @@ for the real logo to show up on generated cards.
 
 **Translations**: `lib/i18n/cards.ts` covers English, Arabic (RTL), Russian, French,
 and Spanish for the cards' static labels (I wrote these myself — a solid starting
-point, not professionally reviewed). What's **not** translated: the dynamic
-condition/diagnosis sentences generated from Encar's raw data (e.g. "1 accident(s),
-other party at fault") and panel names (e.g. "Front fender (L)") — those are
-English-generated strings, and translating arbitrary generated text into 4 more
-languages isn't something a static key/value dictionary can do. They render in English
-regardless of card language; only the surrounding labels and panel *status* words
-(Normal/Replaced/Welded/Corrosion — a small fixed vocabulary) are translated.
+point, not professionally reviewed). Panel names and self-diagnosis group/item/status
+text are now also translated — see "Condition vocabulary translation dictionary"
+below for how that works and what it covers.
 
 **Panel status codes** — updated against a real damaged-car sample (2020 Kia Sportage,
 `/car/41636435`, 2 replaced panels): `NORMAL` and **`REPLACEMENT`** are now confirmed.
@@ -230,3 +226,92 @@ was checked against a too-narrow window around the `insurance` JSON key —
 `inspection.master.supplyNo` turned out to sit ~15KB earlier in the page on this
 listing (vs. a few hundred bytes on the first sample I had), so the bounded-window
 search was missing it. Now checked against the full page.
+
+## Deal calculator port
+
+The vehicle detail page's pricing tool (`components/PriceCalculator.tsx`) is a direct
+port of your standalone Deal Calculator (`index.html`), not a rewrite — the field
+names and the calculation chain in `lib/deal-calculator.ts` match it exactly:
+
+```
+discounted = carPrice - dealerDc
+vatBase = discounted + auctionFees
+vatAmount = invoice ? vatBase/11 : individual ? vatBase*0.07 : 0
+half ("Karaba DC") = vatAmount * vatSharePct/100
+offerPrice = vatBase - half
+totalKRW = offerPrice + fee + carrier + (CIF ? shipping : 0) + handling + parts + customFee + shoring
+fob = totalKRW / rate
+```
+
+`computeDeal()` in `lib/deal-calculator.ts` is verified against a hand-worked example
+(see the commit that adds it — every intermediate value checked, not just the total).
+One thing worth flagging since it looks like it could be a bug but isn't:
+**`incentivesAmount` is computed and shown as an internal-only info line but is *not*
+subtracted from `totalKRW`** — your original tool does this too, it's a reference
+figure (e.g. for spiff tracking), not part of the quoted price.
+
+**Auto-fill, as asked**: car name, plate, and VIN come from the looked-up listing and
+are shown read-only — nothing to retype. Car price is pre-filled from the listing's
+KRW price but stays editable (deals get renegotiated). The calculated total feeds the
+WhatsApp share cards automatically — the old manual "landed price" text box in the
+share block is gone; `ShareToWhatsAppBlock` now derives it from the calculator's
+`totalKRW` converted into whichever currency you pick there.
+
+**Kept exactly**: every input field (car price, auction fees, dealer discount, the
+three VAT modes, VAT-share %, incentives %, dealer fee, car carrier, shipping,
+shoring, handling + custom label, parts, custom fee + custom label, currency, rate),
+the Internal / Buyer-EN / Buyer-AR preview toggle, and the "Share text via WhatsApp"
+button (same message format, always buyer-safe regardless of which preview is
+showing, same as the source tool).
+
+**Deliberately not ported** (not requested, and not something this app's runtime
+supports):
+- PDF/photo export (`html2canvas` + `jsPDF`) — no canvas-rasterization library in this
+  stack; users can still screenshot the preview, or use the existing PNG share cards
+  for a shareable image.
+- Save/load-deal list — the source tool persisted deals via `window.storage`, an API
+  specific to its own hosting environment that doesn't exist here.
+- "Try fetch live rate" now calls this app's own `/api/fx` (which the rest of the app
+  already relies on) instead of `api.exchangerate-api.com` directly, but keeps the same
+  mid-market-minus-20-KRW heuristic your original comment documents (a rough
+  approximation of a bank's transfer-received rate — always double-check against Naver
+  if it matters).
+- The collapsible show/hide chrome around optional fields (dealer DC, incentives,
+  handling, parts, custom fee, shoring, VIN) wasn't ported — every field is just always
+  visible, labeled "leave empty to hide" where that's the field's semantics. Same
+  inputs, less UI chrome.
+
+**Offer Builder integration**: the old separate fee-breakdown price builder
+(`components/PriceBuilder.tsx`, PRD §5.4's multi-car offer tool) is gone — "Add to
+offer" is now a button inside the deal calculator, and it uses the calculator's
+`totalKRW` as the offer item's `price_krw` with the old itemized fee fields
+(`auction_fee_krw`/`carnect_fee_krw`/`inland_krw`/`freight_usd`) zeroed out, since
+those costs are now already folded into the calculator's own total.
+
+## Condition vocabulary translation dictionary
+
+Every real inspection-report sample sent so far showed raw Korean leaking through in
+two places the static `lib/i18n/cards.ts` dictionary never covered: structural panel
+names (`diagnosis[].name`, e.g. "라디에이터 서포트") and the self-diagnosis checklist
+(a `mechanical[]` array on Encar listings I hadn't parsed at all until this round —
+group/item/status text like "원동기" / "오일누유" / "양호"). `lib/i18n/condition-terms.ts`
+is a new ~35-term dictionary (structural panels, self-diagnosis groups, self-diagnosis
+items, and status phrases), each with en/ar/ru/fr/es translations, that both card
+routes now run every raw panel/group/item name and status string through via
+`translateTerm()` before rendering.
+
+**Verified, not guessed**: every group and item name from the real damaged-car sample
+you sent — 8 groups, 27 items, all their Korean status text — translates with zero
+misses (checked via the ts-node harness against that file's actual `mechanical[]`
+array). The three specific terms you flagged as still leaking Korean in the reference
+cards (구동축전지 격리 상태, 고전원전기배선 상태(접속단자, 피복, 보호기구), 라디에이터
+서포트(볼트체결부품)) are in the dictionary now.
+
+**What happens on a miss**: `translateTerm()` falls back to the raw (Korean) string —
+never a blank or an error — and logs a one-time `console.warn` per distinct missing
+term (deduped so one busy listing doesn't spam the log), so any newly-encountered
+vocabulary that isn't in the dictionary yet is visible in the server log rather than
+silently reaching a buyer. Since the dictionary was built from every term in the
+samples provided so far, some Korean status phrasing from listings not yet seen could
+still be missing — the logging is the mechanism for catching that as it comes up,
+not a claim of 100% coverage across every possible Encar listing.

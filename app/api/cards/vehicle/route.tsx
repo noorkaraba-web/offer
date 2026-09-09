@@ -2,8 +2,9 @@ import { ImageResponse } from "next/og";
 import { NextRequest } from "next/server";
 import { findByListingId } from "@/lib/data";
 import { loadOgFonts } from "@/lib/og-fonts";
-import { CARD_WIDTH, CARD_HEIGHT, COLORS, CardHeader, CardFooter, tryLoadLogo } from "@/lib/og-card-shared";
-import { CardLang, dirFor, t } from "@/lib/i18n/cards";
+import { CARD_WIDTH, MIN_CARD_HEIGHT, COLORS, CardHeader, CardFooter, tryLoadLogo } from "@/lib/og-card-shared";
+import { CardLang, dirFor, t, statusLabel } from "@/lib/i18n/cards";
+import { translateTerm } from "@/lib/i18n/condition-terms";
 import { Currency } from "@/lib/types";
 import { formatMoney } from "@/lib/pricing";
 
@@ -27,6 +28,14 @@ export async function GET(req: NextRequest) {
   const affected = vehicle.condition.panels.filter((p) => p.statusCode !== "normal");
 
   const photos = vehicle.photos.slice(0, 4);
+
+  // ── Dynamic height: the damage list can wrap across several lines
+  // depending on how many panels are affected and how long their
+  // translated names are — a fixed height risked clipping it. ──
+  const BASE_H = 330; // header + title + specs/VIN + price banner + footer
+  const PHOTOS_H = photos.length > 0 ? 175 : 0;
+  const DAMAGE_H = affected.length > 0 ? 50 + Math.ceil(affected.length / 3) * 26 : 0;
+  const CARD_HEIGHT = Math.max(MIN_CARD_HEIGHT, BASE_H + PHOTOS_H + DAMAGE_H);
 
   return new ImageResponse(
     (
@@ -96,17 +105,36 @@ export async function GET(req: NextRequest) {
           )}
 
           {affected.length > 0 && (
-            <div
-              style={{
-                display: "flex",
-                marginTop: 14,
-                fontSize: 20,
-                fontWeight: 700,
-                color: COLORS.red,
-                textAlign: rtl ? "right" : "left",
-              }}
-            >
-              ⚠ {t(lang, "structuralDamage")}: {t(lang, "panelsAffected", { n: affected.length })}
+            <div style={{ display: "flex", flexDirection: "column", marginTop: 14 }}>
+              <div
+                style={{
+                  display: "flex",
+                  fontSize: 20,
+                  fontWeight: 700,
+                  color: COLORS.red,
+                  textAlign: rtl ? "right" : "left",
+                }}
+              >
+                ⚠ {t(lang, "structuralDamage")}
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  flexDirection: rtl ? "row-reverse" : "row",
+                  gap: 6,
+                  marginTop: 4,
+                  fontSize: 15,
+                  color: COLORS.muted,
+                }}
+              >
+                {affected.map((p, i) => (
+                  <span key={`${p.rawName}-${i}`} style={{ display: "flex" }}>
+                    {translateTerm(lang, p.rawName)} ({statusLabel(lang, p.statusCode)})
+                    {i < affected.length - 1 ? " •" : ""}
+                  </span>
+                ))}
+              </div>
             </div>
           )}
         </div>

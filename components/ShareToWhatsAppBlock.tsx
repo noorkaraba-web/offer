@@ -7,10 +7,9 @@ import { CARD_LANGUAGES, CardLang } from "@/lib/i18n/cards";
 
 const CURRENCIES: Currency[] = ["USD", "EUR", "AED", "KRW", "JPY", "GBP", "CAD", "AUD"];
 
-export default function ShareToWhatsAppBlock({ vehicle }: { vehicle: Vehicle }) {
+export default function ShareToWhatsAppBlock({ vehicle, totalKrw }: { vehicle: Vehicle; totalKrw: number }) {
   const [lang, setLang] = useState<CardLang>("en");
   const [currency, setCurrency] = useState<Currency>("USD");
-  const [landedPrice, setLandedPrice] = useState<number | "">("");
   const [rates, setRates] = useState<FxRates | null>(null);
   const [generated, setGenerated] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -20,13 +19,14 @@ export default function ShareToWhatsAppBlock({ vehicle }: { vehicle: Vehicle }) 
   useEffect(() => {
     fetch("/api/fx?base=KRW")
       .then((r) => r.json())
-      .then((r: FxRates) => {
-        setRates(r);
-        setLandedPrice(Math.round(convertFromKrw(vehicle.price_krw, "USD", r)));
-      })
+      .then((r: FxRates) => setRates(r))
       .catch(() => setRates(null));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Landed price is derived from the deal calculator's total (KRW), not
+  // typed manually — it updates automatically as the calculator or the
+  // currency selector below changes.
+  const landedPrice = rates ? Math.round(convertFromKrw(totalKrw, currency, rates)) : 0;
 
   const qs = new URLSearchParams({
     id: vehicle.listing_id,
@@ -53,7 +53,8 @@ export default function ShareToWhatsAppBlock({ vehicle }: { vehicle: Vehicle }) 
     <div className="rounded-xl border border-navy-border bg-navy-surface p-4">
       <h3 className="text-sm font-semibold text-navy-text">📤 Share to WhatsApp</h3>
       <p className="mt-1 text-xs text-navy-muted">
-        Pick the customer&rsquo;s language and enter your landed price, then generate the images.
+        Pick the customer&rsquo;s language and currency, then generate the images. Landed price comes
+        from the deal calculator&rsquo;s total above.
       </p>
 
       <div className="mt-3 flex flex-wrap gap-2">
@@ -82,13 +83,9 @@ export default function ShareToWhatsAppBlock({ vehicle }: { vehicle: Vehicle }) 
             </option>
           ))}
         </select>
-        <input
-          type="number"
-          value={landedPrice}
-          onChange={(e) => setLandedPrice(e.target.value === "" ? "" : Number(e.target.value))}
-          placeholder="Landed price"
-          className="flex-1 rounded-md border border-navy-border bg-navy-surface2 px-3 py-2 text-sm text-navy-text"
-        />
+        <div className="flex flex-1 items-center rounded-md border border-navy-border bg-navy-surface2 px-3 py-2 text-sm text-navy-text">
+          {rates ? landedPrice.toLocaleString("en-US") : "Loading rates…"}
+        </div>
         <button
           onClick={() => setGenerated(true)}
           className="whitespace-nowrap rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white"

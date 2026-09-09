@@ -1,7 +1,10 @@
 import { CardLang, dirFor } from "./i18n/cards";
 
 export const CARD_WIDTH = 1200;
-export const CARD_HEIGHT = 675;
+// Both card routes compute their own height dynamically (content varies a
+// lot — a clean car's inspection report is much shorter than a damaged
+// one's full checklist), with 675 as the shared minimum.
+export const MIN_CARD_HEIGHT = 675;
 
 export const COLORS = {
   bg: "#0a0e1a",

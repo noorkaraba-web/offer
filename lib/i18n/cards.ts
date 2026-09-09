@@ -38,7 +38,13 @@ type StringKey =
   | "corrosion"
   | "unknownStatus"
   | "brand"
-  | "footerTagline";
+  | "footerTagline"
+  | "structuralRepairsTitle"
+  | "waterDamage"
+  | "modification"
+  | "recall"
+  | "basicStructureDamage"
+  | "allPanelsNormal";
 
 const STRINGS: Record<CardLang, Record<StringKey, string>> = {
   en: {
@@ -66,6 +72,12 @@ const STRINGS: Record<CardLang, Record<StringKey, string>> = {
     unknownStatus: "Reported",
     brand: "CARNECT",
     footerTagline: "Korean Used Car Exporter",
+    structuralRepairsTitle: "Structural repairs",
+    waterDamage: "Water damage",
+    modification: "Modification",
+    recall: "Recall",
+    basicStructureDamage: "Basic structure",
+    allPanelsNormal: "All panels normal",
   },
   ar: {
     listingPrice: "سعر الإدراج",
@@ -92,6 +104,12 @@ const STRINGS: Record<CardLang, Record<StringKey, string>> = {
     unknownStatus: "تم الإبلاغ عنه",
     brand: "كارنكت",
     footerTagline: "مُصدّر سيارات كورية مستعملة",
+    structuralRepairsTitle: "إصلاحات الهيكل",
+    waterDamage: "ضرر المياه",
+    modification: "تعديل",
+    recall: "استدعاء",
+    basicStructureDamage: "الهيكل الأساسي",
+    allPanelsNormal: "جميع الألواح طبيعية",
   },
   ru: {
     listingPrice: "Цена",
@@ -118,6 +136,12 @@ const STRINGS: Record<CardLang, Record<StringKey, string>> = {
     unknownStatus: "Указано",
     brand: "CARNECT",
     footerTagline: "Экспорт подержанных автомобилей из Кореи",
+    structuralRepairsTitle: "Кузовной ремонт",
+    waterDamage: "Затопление",
+    modification: "Модификация",
+    recall: "Отзыв",
+    basicStructureDamage: "Повреждение кузова",
+    allPanelsNormal: "Все панели в норме",
   },
   fr: {
     listingPrice: "Prix affiché",
@@ -144,6 +168,12 @@ const STRINGS: Record<CardLang, Record<StringKey, string>> = {
     unknownStatus: "Signalé",
     brand: "CARNECT",
     footerTagline: "Exportateur de voitures d'occasion coréennes",
+    structuralRepairsTitle: "Réparations structurelles",
+    waterDamage: "Dégât des eaux",
+    modification: "Modification",
+    recall: "Rappel",
+    basicStructureDamage: "Structure de base",
+    allPanelsNormal: "Tous les panneaux sont normaux",
   },
   es: {
     listingPrice: "Precio de venta",
@@ -170,6 +200,12 @@ const STRINGS: Record<CardLang, Record<StringKey, string>> = {
     unknownStatus: "Reportado",
     brand: "CARNECT",
     footerTagline: "Exportador de coches usados de Corea",
+    structuralRepairsTitle: "Reparaciones estructurales",
+    waterDamage: "Daño por agua",
+    modification: "Modificación",
+    recall: "Retirada (recall)",
+    basicStructureDamage: "Estructura básica",
+    allPanelsNormal: "Todos los paneles normales",
   },
 };
 

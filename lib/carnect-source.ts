@@ -1,4 +1,13 @@
-import { DiagnosisPanel, PanelStatusCode, Source, Vehicle, VehicleCondition } from "./types";
+import {
+  AccidentCounts,
+  DiagnosisPanel,
+  PanelStatusCode,
+  SelfDiagnosisItem,
+  Source,
+  Vehicle,
+  VehicleCondition,
+} from "./types";
+import { tryTranslateTerm } from "./i18n/condition-terms";
 
 /**
  * Live fetcher for carnect.biz's own public pages, used in place of a
@@ -19,10 +28,11 @@ import { DiagnosisPanel, PanelStatusCode, Source, Vehicle, VehicleCondition } fr
  *    changes, per-panel diagnosis results). No plate number anywhere, and
  *    no plate-shaped key in that JSON either (checked `carNo`, `plateNo`,
  *    `licensePlate`, `regNo` — none present).
- *  - `heydealer` listing pages: NOT verified — no real sample seen yet.
- *    Reuses the same selectors as encar/supercar (the site's `ta-`/`cd-`
- *    prefixed classes are a shared design system); returns null and falls
- *    back to mock data if a real page doesn't match.
+ *  - `heydealer` listing pages: verified against a real listing. Condition
+ *    data arrives as plain `ta-specs__cell` rows (not embedded JSON like
+ *    Encar), no per-panel diagnosis, photos are un-proxied
+ *    `heydealer-api.s3.amazonaws.com` URLs, and `<h1>` has no brand/model
+ *    marker (falls back to putting the whole name in `model`).
  *  - Catalog pages (`/catalog`, `/catalog?tab=encar`): fully parsed and
  *    verified — used for the plate-search fallback below.
  *  - Plate search: the catalog has a real "License plate" search box, but
@@ -155,37 +165,15 @@ function extractJsonLdVehicle(html: string): JsonLdVehicle | null {
 }
 
 // Encar's panel `name` field is usually an ALL_CAPS_ENUM like
-// FRONT_FENDER_LEFT. Mapped to what the reference UI shows; anything not in
-// this map falls back to a humanized version of the enum (or the raw value
-// verbatim if it isn't enum-shaped at all — e.g. already-Korean text, which
-// happens on real listings per a sample screenshot showing an untranslated
-// "라디에이터 서포트(볼트체결부위)" panel name).
-const PANEL_NAME_MAP: Record<string, string> = {
-  FRONT_FENDER_LEFT: "Front fender (L)",
-  FRONT_FENDER_RIGHT: "Front fender (R)",
-  FRONT_DOOR_LEFT: "Front door (L)",
-  FRONT_DOOR_RIGHT: "Front door (R)",
-  BACK_DOOR_LEFT: "Rear door (L)",
-  BACK_DOOR_RIGHT: "Rear door (R)",
-  TRUNK_LID: "Trunk lid",
-  HOOD: "Hood",
-  ROOF: "Roof",
-  QUARTER_PANEL_LEFT: "Quarter panel (L)",
-  QUARTER_PANEL_RIGHT: "Quarter panel (R)",
-  SIDE_SILL_PANEL_LEFT: "Side sill (L)",
-  SIDE_SILL_PANEL_RIGHT: "Side sill (R)",
-  PILLAR_PANEL_A_LEFT: "A-pillar (L)",
-  PILLAR_PANEL_A_RIGHT: "A-pillar (R)",
-  PILLAR_PANEL_B_LEFT: "B-pillar (L)",
-  PILLAR_PANEL_B_RIGHT: "B-pillar (R)",
-  PILLAR_PANEL_C_LEFT: "C-pillar (L)",
-  PILLAR_PANEL_C_RIGHT: "C-pillar (R)",
-  RADIATOR_SUPPORT: "Radiator support",
-  RAD_SUPPORT: "Radiator support",
-};
-
+// FRONT_FENDER_LEFT, but real listings can also carry raw Korean text (e.g.
+// "라디에이터 서포트(볼트체결부위)") for panels with no enum. Both forms are
+// looked up in the shared condition-terms dictionary (also used to build
+// the fully-translated inspection card); an unmapped term falls back to a
+// humanized version of the enum, or the raw value verbatim if not
+// enum-shaped, and is logged by translateTerm so gaps are visible.
 function humanizePanelName(raw: string): string {
-  if (PANEL_NAME_MAP[raw]) return PANEL_NAME_MAP[raw];
+  const translated = tryTranslateTerm("en", raw);
+  if (translated) return translated;
   if (!/^[A-Z0-9_]+$/.test(raw)) return raw; // Not enum-shaped (e.g. Korean) — show as-is.
   return raw
     .toLowerCase()
@@ -255,6 +243,7 @@ function extractEncarCondition(html: string): VehicleCondition | null {
   const panelRe = /\\"name\\":\\"([^"\\]+)\\"[^}]*?\\"resultCode\\":\\"([^"\\]+)\\"/g;
   const panels: DiagnosisPanel[] = [...region.matchAll(panelRe)].map(([, rawName, rawStatus]) => ({
     name: humanizePanelName(rawName),
+    rawName,
     statusCode: PANEL_STATUS_MAP[rawStatus] ?? "unknown",
     rawStatus,
   }));
@@ -270,10 +259,35 @@ function extractEncarCondition(html: string): VehicleCondition | null {
   // sample), so a bounded window misses it.
   const hasInspectionReport = /\\"supplyNo\\":\\"[^"\\]+\\"/.test(html);
 
+  // Self-diagnosis checklist (engine/transmission/steering/brakes/electrical/
+  // fuel) — a separate, optional "mechanical":[...] array, confirmed on a
+  // real damaged-car sample. Not anchored near `insurance`/`diagnosis` in a
+  // fixed way, so searched against the whole page rather than `region`.
+  const mechanicalRe =
+    /\\"group\\":\\"([^"\\]+)\\",\\"item\\":\\"([^"\\]+)\\",\\"statusKo\\":\\"([^"\\]+)\\",\\"ok\\":(true|false)/g;
+  const selfDiagnosis: SelfDiagnosisItem[] = [...html.matchAll(mechanicalRe)].map(
+    ([, group, item, statusKo, ok]) => ({ group, item, statusKo, ok: ok === "true" })
+  );
+
   let grade: VehicleCondition["grade"];
   if (totalLoss > 0 || floodLoss > 0) grade = "C";
   else if (myAccidents > 0 || otherAccidents > 0) grade = "B";
   else grade = "A";
+
+  const accidentCounts: AccidentCounts = {
+    myAccidents,
+    otherAccidents,
+    totalLoss,
+    floodLoss,
+    ownerChanges,
+    theft: 0, // Not exposed in Encar's `insurance` JSON (HeyDealer's spec-table equivalent has it).
+  };
+
+  const waterDamage = /\\"waterlog\\":(true|false)/.exec(html)?.[1] === "true";
+  const recall = /\\"recall\\":(true|false)/.exec(html)?.[1] === "true";
+  // Best-effort stand-in for "modification" — no confirmed 개조/modification
+  // key in either real sample. See the `flags` doc comment on VehicleCondition.
+  const modification = /\\"simpleRepair\\":(true|false)/.exec(html)?.[1] === "true";
 
   return {
     grade,
@@ -282,6 +296,15 @@ function extractEncarCondition(html: string): VehicleCondition | null {
     inspection: hasInspectionReport ? "Inspection report available" : "Not reported by source",
     owner_changes: ownerChanges,
     panels,
+    selfDiagnosis,
+    accidentCounts,
+    inspectionValidUntil: null, // Encar doesn't expose a valid-until date (HeyDealer does).
+    flags: {
+      waterDamage,
+      modification,
+      recall,
+      basicStructureDamage: panels.some((p) => p.statusCode !== "normal"),
+    },
   };
 }
 
@@ -339,6 +362,10 @@ function buildHeydealerCondition(specs: Record<string, string>): VehicleConditio
       : "Not reported by source",
     owner_changes: ownerChanges ?? 0,
     panels: [],
+    selfDiagnosis: [],
+    accidentCounts: { myAccidents: my, otherAccidents: other, totalLoss: tLoss, floodLoss: fLoss, ownerChanges: ownerChanges ?? 0, theft: stolen },
+    inspectionValidUntil: specs["inspection valid until"] ?? null,
+    flags: null, // Not exposed on HeyDealer's spec table.
   };
 }
 
@@ -434,6 +461,10 @@ function parseListingHtml(html: string, listingId: string, source: Source): Vehi
     inspection: "Not reported by source",
     owner_changes: 0,
     panels: [],
+    selfDiagnosis: [],
+    accidentCounts: null,
+    inspectionValidUntil: null,
+    flags: null,
   };
 
   return {

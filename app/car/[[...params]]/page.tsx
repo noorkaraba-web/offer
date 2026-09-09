@@ -4,8 +4,7 @@ import PhotoGallery from "@/components/PhotoGallery";
 import VehicleHeader from "@/components/VehicleHeader";
 import SpecGrid from "@/components/SpecGrid";
 import ConditionAccidentBlock from "@/components/ConditionAccidentBlock";
-import PriceBuilder from "@/components/PriceBuilder";
-import ShareToWhatsAppBlock from "@/components/ShareToWhatsAppBlock";
+import VehiclePricingSection from "@/components/VehiclePricingSection";
 
 const SOURCE_LABEL: Record<string, string> = {
   encar: "Encar",
@@ -43,8 +42,7 @@ export default async function VehicleDetailPage({
       </div>
 
       <ConditionAccidentBlock condition={vehicle.condition} />
-      <ShareToWhatsAppBlock vehicle={vehicle} />
-      <PriceBuilder vehicle={vehicle} />
+      <VehiclePricingSection vehicle={vehicle} />
       <SpecGrid vehicle={vehicle} />
     </div>
   );
