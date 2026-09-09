@@ -149,5 +149,67 @@ themselves are served by `GET /api/cards/vehicle` and `GET /api/cards/condition`
 Plate lookup is actually in, ahead of its "should have" listing, since it's free on
 mock data (see §6 above). Still open, matching "should have (v1.1)":
 Telegram/KakaoTalk sharing on the offer public page and offer-draft confirmation
-(vehicle detail already has both WhatsApp and Telegram, via `ShareBlock`), saved fee
-presets per destination country, and offer view notifications.
+(vehicle detail's share block is WhatsApp-only now — see below), saved fee presets per
+destination country, and offer view notifications.
+
+## Vehicle detail redesign, share cards, and the two bugs you hit
+
+Reworked to match the reference screenshots: dark navy theme, yellow plate badge,
+KRW-primary price with USD/EUR underneath, a full photo grid (not a scroll strip), a
+"Condition & accident history" block (structural-damage warning + per-panel status
+chips + a grade/insurance/diagnosis/inspection summary row), and a new "Share to
+WhatsApp" block (language picker, currency + landed-price input, generates two cards).
+The old fee-breakdown price builder (for the multi-car Offer Builder — a different
+PRD flow) is still there, just restyled and moved below the new share block.
+
+**The font bug, fixed first as asked:** "Failed to load dynamic font" happens because
+`next/og`'s `ImageResponse`, given no explicit `fonts`, tries to resolve non-Latin
+glyphs (Korean plate characters, at minimum) from a remote font-resolution service at
+render time — which 400s if that service is unreachable. I couldn't reproduce your
+exact 500 on `/api/cards/condition` without a running server, but it's the same
+mechanism, and every card route now supplies local fonts explicitly
+(`lib/og-fonts.ts`), eliminating any runtime font network call — this should fix both.
+Fonts are Google's Noto Sans / Noto Sans Arabic / Noto Sans KR, pulled via a shallow
+sparse clone of `google/fonts` (the sandbox that built this couldn't reach
+`fonts.gstatic.com` directly, but could reach GitHub) and committed under
+`assets/fonts/`. **`NotoSansKR.ttf` is the full unsubset variable font (~10MB)** —
+there's no `fonttools`/`pyftsubset` available in that sandbox to cut it down to just
+the ~50 Hangul syllables Korean plates use. Works correctly as-is; subsetting it is a
+worthwhile follow-up with real dev tooling (smaller edge function, faster cold start).
+
+**The `/api/lookup?id=42147167` 404**: I couldn't fetch that page to check, so I can't
+tell you definitively whether it's delisted/a typo, or a real listing whose price the
+parser couldn't find (it deliberately returns nothing rather than show a car with no
+price — see `parseListingHtml`'s `if (!priceKrwM) return null`). If it's a real active
+listing, send me `curl https://carnect.biz/car/42147167` and I'll check.
+
+**Logo**: cards reference `{origin}/logo-white.png` at render time (`tryLoadLogo` in
+`lib/og-card-shared.tsx`) and fall back to a plain "CARNECT" text wordmark if that
+404s — so nothing breaks before you commit it. **You'll need to add
+`public/logo-white.png` to the repo** (create the `public/` folder if it isn't there)
+for the real logo to show up on generated cards.
+
+**Translations**: `lib/i18n/cards.ts` covers English, Arabic (RTL), Russian, French,
+and Spanish for the cards' static labels (I wrote these myself — a solid starting
+point, not professionally reviewed). What's **not** translated: the dynamic
+condition/diagnosis sentences generated from Encar's raw data (e.g. "1 accident(s),
+other party at fault") and panel names (e.g. "Front fender (L)") — those are
+English-generated strings, and translating arbitrary generated text into 4 more
+languages isn't something a static key/value dictionary can do. They render in English
+regardless of card language; only the surrounding labels and panel *status* words
+(Normal/Replaced/Welded/Corrosion — a small fixed vocabulary) are translated.
+
+**Panel status codes** — updated against a real damaged-car sample (2020 Kia Sportage,
+`/car/41636435`, 2 replaced panels): `NORMAL` and **`REPLACEMENT`** are now confirmed.
+Note the real code is `REPLACEMENT`, not `REPLACED` as originally guessed — fixed in
+`PANEL_STATUS_MAP` (`lib/carnect-source.ts`), with `REPLACED` kept as an alias in case
+another endpoint/version uses that form. `WELDED`/`CORROSION` are still unconfirmed —
+this sample's damage was replacement-only, no welded or corroded panels to check
+against. Any code that doesn't match falls back to showing the raw value rather than a
+possibly-wrong translation, so nothing is silently mislabeled.
+
+Also fixed from the same sample: `condition.inspection` ("Inspection report available")
+was checked against a too-narrow window around the `insurance` JSON key —
+`inspection.master.supplyNo` turned out to sit ~15KB earlier in the page on this
+listing (vs. a few hundred bytes on the first sample I had), so the bounded-window
+search was missing it. Now checked against the full page.

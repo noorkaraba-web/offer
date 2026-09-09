@@ -10,6 +10,18 @@ const config: Config = {
           light: "#15533e",
           accent: "#d9a441",
         },
+        navy: {
+          bg: "#0a0e1a",
+          surface: "#121829",
+          surface2: "#181f35",
+          border: "#232c44",
+          text: "#f2f4f8",
+          muted: "#8b93a7",
+        },
+        plate: {
+          DEFAULT: "#f2b705",
+          text: "#1a1305",
+        },
       },
     },
   },

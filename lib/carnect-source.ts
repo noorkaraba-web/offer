@@ -1,4 +1,4 @@
-import { Source, Vehicle, VehicleCondition } from "./types";
+import { DiagnosisPanel, PanelStatusCode, Source, Vehicle, VehicleCondition } from "./types";
 
 /**
  * Live fetcher for carnect.biz's own public pages, used in place of a
@@ -137,6 +137,71 @@ function extractJsonLdVehicle(html: string): JsonLdVehicle | null {
   return null;
 }
 
+// Encar's panel `name` field is usually an ALL_CAPS_ENUM like
+// FRONT_FENDER_LEFT. Mapped to what the reference UI shows; anything not in
+// this map falls back to a humanized version of the enum (or the raw value
+// verbatim if it isn't enum-shaped at all — e.g. already-Korean text, which
+// happens on real listings per a sample screenshot showing an untranslated
+// "라디에이터 서포트(볼트체결부위)" panel name).
+const PANEL_NAME_MAP: Record<string, string> = {
+  FRONT_FENDER_LEFT: "Front fender (L)",
+  FRONT_FENDER_RIGHT: "Front fender (R)",
+  FRONT_DOOR_LEFT: "Front door (L)",
+  FRONT_DOOR_RIGHT: "Front door (R)",
+  BACK_DOOR_LEFT: "Rear door (L)",
+  BACK_DOOR_RIGHT: "Rear door (R)",
+  TRUNK_LID: "Trunk lid",
+  HOOD: "Hood",
+  ROOF: "Roof",
+  QUARTER_PANEL_LEFT: "Quarter panel (L)",
+  QUARTER_PANEL_RIGHT: "Quarter panel (R)",
+  SIDE_SILL_PANEL_LEFT: "Side sill (L)",
+  SIDE_SILL_PANEL_RIGHT: "Side sill (R)",
+  PILLAR_PANEL_A_LEFT: "A-pillar (L)",
+  PILLAR_PANEL_A_RIGHT: "A-pillar (R)",
+  PILLAR_PANEL_B_LEFT: "B-pillar (L)",
+  PILLAR_PANEL_B_RIGHT: "B-pillar (R)",
+  PILLAR_PANEL_C_LEFT: "C-pillar (L)",
+  PILLAR_PANEL_C_RIGHT: "C-pillar (R)",
+  RADIATOR_SUPPORT: "Radiator support",
+  RAD_SUPPORT: "Radiator support",
+};
+
+function humanizePanelName(raw: string): string {
+  if (PANEL_NAME_MAP[raw]) return PANEL_NAME_MAP[raw];
+  if (!/^[A-Z0-9_]+$/.test(raw)) return raw; // Not enum-shaped (e.g. Korean) — show as-is.
+  return raw
+    .toLowerCase()
+    .split("_")
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+// "NORMAL" and "REPLACEMENT" are confirmed against real samples (a clean
+// car and a damaged one — 2 replaced panels: HOOD, FRONT_FENDER_LEFT).
+// Note the confirmed code is "REPLACEMENT", not "REPLACED" as originally
+// guessed — kept below as an alias in case a different endpoint/version
+// uses that form. WELDED/CORROSION remain unconfirmed guesses (this
+// sample's damage was replacement-only, no welded or corroded panels to
+// check against) — matched to a reference screenshot's displayed
+// "WELDED / PANEL BEATEN" label, but the underlying Encar enum value is
+// still unverified. Unmapped codes fall back to the raw value rather than
+// a wrong translation.
+const PANEL_STATUS_MAP: Record<string, PanelStatusCode> = {
+  NORMAL: "normal",
+  REPLACEMENT: "replaced",
+  REPLACED: "replaced",
+  EXCHANGE: "replaced",
+  EXCHANGED: "replaced",
+  WELDED: "welded",
+  WELDING: "welded",
+  WELD: "welded",
+  PANEL_BEATEN: "welded",
+  SHEET_METAL: "welded",
+  CORROSION: "corrosion",
+  RUST: "corrosion",
+};
+
 /**
  * Encar's real inspection/insurance data arrives as an escaped JSON blob
  * inside the page's RSC payload (not as plain HTML), e.g.
@@ -170,13 +235,23 @@ function extractEncarCondition(html: string): VehicleCondition | null {
     insurance_record = parts.join("; ");
   }
 
-  const resultCodes = [...region.matchAll(/\\"resultCode\\":\\"([A-Z]+)\\"/g)].map((m) => m[1]);
-  const diagnosis =
-    resultCodes.length === 0
-      ? "Not reported by source"
-      : `${resultCodes.filter((c) => c === "NORMAL").length}/${resultCodes.length} inspected panels normal`;
+  const panelRe = /\\"name\\":\\"([^"\\]+)\\"[^}]*?\\"resultCode\\":\\"([^"\\]+)\\"/g;
+  const panels: DiagnosisPanel[] = [...region.matchAll(panelRe)].map(([, rawName, rawStatus]) => ({
+    name: humanizePanelName(rawName),
+    statusCode: PANEL_STATUS_MAP[rawStatus] ?? "unknown",
+    rawStatus,
+  }));
 
-  const hasInspectionReport = /\\"supplyNo\\":\\"[^"\\]+\\"/.test(region);
+  const diagnosis =
+    panels.length === 0
+      ? "Not reported by source"
+      : `${panels.filter((p) => p.statusCode === "normal").length}/${panels.length} inspected panels normal`;
+
+  // Searched against the full page, not the bounded `region` above: unlike
+  // diagnosis/insurance (which sit close together), `inspection.master.supplyNo`
+  // can be tens of KB away from the insurance block (confirmed on a real
+  // sample), so a bounded window misses it.
+  const hasInspectionReport = /\\"supplyNo\\":\\"[^"\\]+\\"/.test(html);
 
   let grade: VehicleCondition["grade"];
   if (totalLoss > 0 || floodLoss > 0) grade = "C";
@@ -189,6 +264,7 @@ function extractEncarCondition(html: string): VehicleCondition | null {
     diagnosis,
     inspection: hasInspectionReport ? "Inspection report available" : "Not reported by source",
     owner_changes: ownerChanges,
+    panels,
   };
 }
 
@@ -280,6 +356,7 @@ function parseListingHtml(html: string, listingId: string, source: Source): Vehi
     diagnosis: "Not reported by source",
     inspection: "Not reported by source",
     owner_changes: 0,
+    panels: [],
   };
 
   return {

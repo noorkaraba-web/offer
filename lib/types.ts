@@ -2,12 +2,26 @@ export type Source = "encar" | "heydealer" | "supercar";
 
 export type ConditionGrade = "A" | "B" | "C" | "N/A";
 
+/** Canonical, language-independent panel status — mapped to display text by lib/i18n/cards.ts. */
+export type PanelStatusCode = "normal" | "replaced" | "welded" | "corrosion" | "unknown";
+
+export interface DiagnosisPanel {
+  /** Human-readable panel name, e.g. "Front fender (L)". Falls back to the
+   * source's raw (sometimes Korean) label when we don't have a mapping for it. */
+  name: string;
+  statusCode: PanelStatusCode;
+  /** Raw label from the source, kept for statuses we couldn't map (statusCode "unknown"). */
+  rawStatus: string;
+}
+
 export interface VehicleCondition {
   grade: ConditionGrade;
   insurance_record: string;
   diagnosis: string;
   inspection: string;
   owner_changes: number;
+  /** Per-panel diagnosis results, when the source provides them (Encar only, confirmed). */
+  panels: DiagnosisPanel[];
 }
 
 export interface Vehicle {

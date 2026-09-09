@@ -2,26 +2,27 @@ import { Vehicle } from "@/lib/types";
 
 export default function SpecGrid({ vehicle }: { vehicle: Vehicle }) {
   const rows: [string, string][] = [
-    ["Year", String(vehicle.year)],
-    ["Registered", vehicle.reg_date],
-    ["Mileage", `${vehicle.mileage_km.toLocaleString("en-US")} km`],
-    ["Fuel", vehicle.fuel],
-    ["Transmission", vehicle.transmission],
-    ...(vehicle.engine_cc != null ? ([["Engine", `${vehicle.engine_cc.toLocaleString("en-US")} cc`]] as [string, string][]) : []),
-    ["Color", vehicle.color],
+    ["Brand", vehicle.brand],
+    ["Model", vehicle.model],
+    ["Colour", vehicle.color],
     ["Body", vehicle.body],
+    ...(vehicle.engine_cc != null ? ([["Engine", `${vehicle.engine_cc.toLocaleString("en-US")} cc`]] as [string, string][]) : []),
     ...(vehicle.seats != null ? ([["Seats", String(vehicle.seats)]] as [string, string][]) : []),
     ...(vehicle.vin ? ([["VIN", vehicle.vin]] as [string, string][]) : []),
+    ["Listing ID", vehicle.listing_id],
   ];
 
   return (
-    <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl bg-white p-4 shadow-sm sm:grid-cols-3">
-      {rows.map(([label, value]) => (
-        <div key={label}>
-          <dt className="text-xs uppercase tracking-wide text-gray-500">{label}</dt>
-          <dd className="text-sm font-medium text-gray-900">{value}</dd>
-        </div>
-      ))}
-    </dl>
+    <div className="rounded-xl border border-navy-border bg-navy-surface p-4">
+      <h3 className="mb-3 text-sm font-semibold text-navy-text">📄 Full specifications</h3>
+      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {rows.map(([label, value]) => (
+          <div key={label} className="rounded-lg bg-navy-surface2 p-3">
+            <dt className="text-xs uppercase tracking-wide text-navy-muted">{label}</dt>
+            <dd className="mt-1 truncate text-sm font-medium text-navy-text">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 }

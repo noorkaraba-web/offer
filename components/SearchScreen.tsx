@@ -69,8 +69,8 @@ export default function SearchScreen({
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-gray-900">Lookup a car</h1>
-        <p className="mt-1 text-sm text-gray-500">
+        <h1 className="text-xl font-bold text-navy-text">Lookup a car</h1>
+        <p className="mt-1 text-sm text-navy-muted">
           Enter a Korean plate (e.g. 12가3456) or a Carnect listing ID (e.g. 41436660).
         </p>
       </div>
@@ -89,7 +89,7 @@ export default function SearchScreen({
             if (state === "not_found") setState("idle");
           }}
           placeholder="Plate or listing ID"
-          className="flex-1 rounded-lg border border-gray-300 px-3 py-3 text-base"
+          className="flex-1 rounded-lg border border-navy-border bg-navy-surface px-3 py-3 text-base text-navy-text"
           autoFocus
         />
         <button
@@ -102,7 +102,7 @@ export default function SearchScreen({
       </form>
 
       {state === "not_found" && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+        <div className="rounded-lg border border-red-800 bg-red-950/40 p-3 text-sm text-red-300">
           No car found for &ldquo;{query}&rdquo;.{" "}
           {/[가-힣]/.test(query) && (
             <>Try the listing ID instead — it&rsquo;s in the Carnect URL, e.g. /car/41436660.</>
@@ -116,22 +116,22 @@ export default function SearchScreen({
         <Stat label="Encar (mock)" value={indexCounters.encar} />
         <Stat label="HeyDealer (mock)" value={indexCounters.heydealer} />
       </div>
-      <p className="-mt-4 text-xs text-gray-400">
+      <p className="-mt-4 text-xs text-navy-muted">
         Lookups try carnect.biz live first; these counts are only the local mock fallback.
       </p>
 
       {recent.length > 0 && (
         <div>
-          <h2 className="mb-2 text-sm font-semibold text-gray-900">Recent lookups</h2>
-          <ul className="divide-y divide-gray-100 rounded-lg bg-white shadow-sm">
+          <h2 className="mb-2 text-sm font-semibold text-navy-text">Recent lookups</h2>
+          <ul className="divide-y divide-navy-border rounded-lg border border-navy-border bg-navy-surface">
             {recent.map((r) => (
               <li key={r.listing_id}>
                 <button
                   onClick={() => router.push(`/car/${r.listing_id}`)}
                   className="flex w-full items-center justify-between px-4 py-3 text-left text-sm"
                 >
-                  <span className="font-medium text-gray-900">{r.title_en}</span>
-                  <span className="text-xs text-gray-400">{r.listing_id}</span>
+                  <span className="font-medium text-navy-text">{r.title_en}</span>
+                  <span className="text-xs text-navy-muted">{r.listing_id}</span>
                 </button>
               </li>
             ))}
@@ -144,9 +144,9 @@ export default function SearchScreen({
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-lg bg-white py-3 shadow-sm">
-      <div className="text-lg font-bold text-carnect">{value}</div>
-      <div className="text-xs text-gray-500">{label}</div>
+    <div className="rounded-lg border border-navy-border bg-navy-surface py-3">
+      <div className="text-lg font-bold text-carnect-accent">{value}</div>
+      <div className="text-xs text-navy-muted">{label}</div>
     </div>
   );
 }

@@ -32,13 +32,13 @@ export default async function OfferPublicPage({ params }: { params: { slug: stri
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-bold text-gray-900">Offer for {offer.buyer_name}</h1>
-        <p className="text-sm text-gray-500">
+        <h1 className="text-xl font-bold text-navy-text">Offer for {offer.buyer_name}</h1>
+        <p className="text-sm text-navy-muted">
           {items.length} vehicle{items.length === 1 ? "" : "s"} · Valid until{" "}
           {new Date(offer.expires_at).toDateString()}
         </p>
         {expired && (
-          <p className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <p className="mt-2 rounded-lg bg-amber-950/40 px-3 py-2 text-sm text-amber-300">
             This offer has expired. Prices below may no longer be current — contact Carnect to
             reconfirm.
           </p>
@@ -61,8 +61,8 @@ export default async function OfferPublicPage({ params }: { params: { slug: stri
           const carText = `${vehicle.title_en} — ${formatMoney(total, offer.currency)}\n${vehicle.url}`;
 
           return (
-            <div key={item.listing_id} className="overflow-hidden rounded-xl bg-white shadow-sm">
-              <div className="relative aspect-[16/9] w-full bg-gray-200">
+            <div key={item.listing_id} className="overflow-hidden rounded-xl border border-navy-border bg-navy-surface">
+              <div className="relative aspect-[16/9] w-full bg-navy-surface2">
                 <Image
                   src={vehicle.photos[0]}
                   alt={vehicle.title_en}
@@ -72,17 +72,17 @@ export default async function OfferPublicPage({ params }: { params: { slug: stri
                 />
               </div>
               <div className="p-4">
-                <h2 className="text-base font-semibold text-gray-900">{vehicle.title_en}</h2>
-                <p className="mt-1 text-sm text-gray-500">
+                <h2 className="text-base font-semibold text-navy-text">{vehicle.title_en}</h2>
+                <p className="mt-1 text-sm text-navy-muted">
                   {vehicle.year} · {vehicle.mileage_km.toLocaleString("en-US")} km · {vehicle.fuel} ·{" "}
                   {vehicle.transmission}
                 </p>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-navy-muted">
                   Grade {vehicle.condition.grade} · {vehicle.condition.insurance_record}
                 </p>
 
                 {item.show_breakdown && (
-                  <ul className="mt-3 space-y-1 text-xs text-gray-500">
+                  <ul className="mt-3 space-y-1 text-xs text-navy-muted">
                     <li>Vehicle + fees (FOB): {formatMoney(pricing.fob_display, offer.currency)}</li>
                     {pricing.cfr_display !== null && (
                       <li>Freight to {offer.destination_port}: included below</li>
@@ -90,15 +90,15 @@ export default async function OfferPublicPage({ params }: { params: { slug: stri
                   </ul>
                 )}
 
-                <p className="mt-3 text-2xl font-bold text-carnect">
+                <p className="mt-3 text-2xl font-bold text-carnect-accent">
                   {formatMoney(total, offer.currency)}
                   {hasDestination && (
-                    <span className="ml-1 text-sm font-normal text-gray-500">
+                    <span className="ml-1 text-sm font-normal text-navy-muted">
                       CFR {offer.destination_port}
                     </span>
                   )}
                 </p>
-                {item.note && <p className="mt-2 text-sm text-gray-600">{item.note}</p>}
+                {item.note && <p className="mt-2 text-sm text-navy-muted">{item.note}</p>}
 
                 <a
                   href={`https://wa.me/?text=${encodeURIComponent(carText)}`}
