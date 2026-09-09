@@ -43,41 +43,52 @@ genuinely doesn't exist). `findByListingId`/`findByPlate` are async now for this
 
 **Confirmed working**, verified against real page dumps (not guessed):
 - `supercar` listing pages (`/car/supercar/{id}`) — brand, model, year, USD + KRW
-  price, 7 specs, full photo gallery. Fully parsed.
+  price, 7 specs, full photo gallery. No condition/VIN data on this template at all
+  (Carnect's own curated inventory, not Encar-sourced — plausibly why).
+- `encar` listing pages (`/car/{numericId}`) — same specs as supercar, **plus**: a
+  clean `application/ld+json` Vehicle schema block (used as the primary source for
+  brand/model/year/fuel/transmission/color/mileage/engine — more reliable than the
+  visible-text scrape, which is used as a fallback/supplement), VIN, seats, and **real**
+  condition data. Encar's inspection report — accident counts (this owner vs. other
+  party at fault), owner changes, total/flood loss flags, and a per-panel diagnosis
+  array — arrives as escaped JSON inside the page's RSC payload, not as plain HTML;
+  `extractEncarCondition` regexes the relevant fields out of a bounded window around
+  it. One caveat: **Encar doesn't hand us a letter grade** — `condition.grade` is a
+  *derived* heuristic (A = no accidents, B = accident(s) but no total loss, C = total
+  or flood loss on record), not something Encar itself reports. 12 full-size photos
+  parsed correctly (real `<img src="https://img.carnect.biz/...">` tags, deduped by
+  path so the same photo at a different crop isn't listed twice).
 - Catalog pages (`/catalog`, `/catalog?tab=encar`) — card-level brand/model, year,
   mileage, fuel, reg. date, price (Encar shows USD + KRW; HeyDealer often shows "Price
   on request" instead). Used internally for the plate-search fallback below.
+- **No plate number anywhere** — checked both the visible HTML and the embedded JSON
+  (including likely key names: `carNo`, `plateNo`, `licensePlate`, `regNo` — none
+  present) on the real Encar page. This confirms the PRD §6 concern directly rather
+  than just inferring it.
 - Real image hosts: `img.carnect.biz` (Encar), `heydealer-api.s3.amazonaws.com`
   (HeyDealer), `carnect.biz/api/images/...` (Supercar) — all in `next.config.js`.
 
-**Best-effort, NOT verified** — I don't have a real Encar or HeyDealer *listing detail*
-page to test against, only their catalog (list) pages:
-- `parseListingHtml` in `lib/carnect-source.ts` reuses the same `ta-specs`/`ta-price`
-  selectors confirmed on the supercar template, since the site's `ta-`/`cd-`-prefixed
-  classes look like a shared design system. If a real Encar/HeyDealer page doesn't
-  match, the parser returns `null` and the mock fallback kicks in silently — it never
-  ships a garbled record, but it also means listing-ID lookup for those two sources may
-  just be running on mock data right now. **Send me one real listing detail page HTML
-  (e.g. `curl https://carnect.biz/car/41733697`) and I'll verify/fix this properly.**
-- Brand/model splitting for non-supercar listings relies on a heuristic (a
-  `<!-- --> <!-- -->` marker Next.js emits between two adjacent JSX text values,
-  observed on catalog cards) that may or may not appear the same way on a detail page.
-  Worst case, `brand` is empty and the full name lands in `model` — `title_en` is
-  always correct either way.
-- **Plate lookup**: the catalog page has a real "License plate" search box (Encar tab
-  only), so carnect.biz *can* resolve plates — but it's wired to client JS with no
-  visible request in the static HTML. `fetchLiveByPlate` guesses
-  `/catalog?tab=encar&plate={value}` (matching our own API's `?plate=` naming) and
-  parses whatever comes back; zero results falls back to the mock plate lookup. If you
-  can grab the real network request (open that search box in devtools, search a real
-  plate, copy the request URL), I'll wire it precisely.
-- `condition` (insurance/accident/diagnosis/inspection/owner changes) and `vin` never
-  appeared on the one detail page confirmed (supercar) at all — plausibly because
-  that's Carnect's own curated inventory, not Encar-sourced. `Vehicle.condition` always
-  exists but defaults every field to `"Not reported by source"` / grade `"N/A"` when
-  absent, rather than being optional everywhere — check `data_origin` on a record
-  (`"live"` vs `"mock"`, also shown as a badge on the vehicle detail page) before
-  reading too much into a blank condition block.
+**Best-effort, NOT verified**:
+- **HeyDealer listing detail pages** — still no real sample. `parseListingHtml` falls
+  back to the same selectors confirmed on encar/supercar (shared `ta-`/`cd-`-prefixed
+  design system), and returns `null` → mock fallback if a real page doesn't match, same
+  safe-degrade as before. Send me one (`curl https://carnect.biz/car/heydealer/{id}`)
+  and I'll verify it the same way.
+- **Plate lookup** — still unconfirmed. The Encar detail page I now have is a normal
+  listing, not a plate-search *result*, so it doesn't tell me what request the search
+  box makes. `fetchLiveByPlate` still guesses `/catalog?tab=encar&plate={value}`; zero
+  results falls back to mock. The only way to actually confirm this is capturing the
+  real request — open that search box in devtools, search a real plate, copy the
+  request URL — I can't get there from a listing page.
+- Brand/model splitting: the `<!-- --> <!-- -->` marker trick is now confirmed on a
+  real encar `<h1>` too (`Chevrolet<!-- --> <!-- -->Bolt EUV Premiere`), not just
+  catalog cards — so this is more solid than before, just still worth flagging since
+  HeyDealer's template is unconfirmed.
+
+`Vehicle.condition` always exists but defaults every field to `"Not reported by
+source"` / grade `"N/A"` when absent (supercar, or HeyDealer until verified), rather
+than being optional everywhere. Check `data_origin` on a record (`"live"` vs `"mock"`,
+also shown as a badge on the vehicle detail page) to know which you're looking at.
 
 Caching: successful live fetches (listing pages and catalog pages alike) are cached
 in-process for 6h per PRD §8, with concurrent identical requests deduped to a single

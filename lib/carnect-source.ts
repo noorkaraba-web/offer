@@ -1,27 +1,39 @@
-import { Currency, Source, Vehicle, VehicleCondition } from "./types";
+import { Source, Vehicle, VehicleCondition } from "./types";
 
 /**
  * Live fetcher for carnect.biz's own public pages, used in place of a
  * crawler DB per the "no dev, no DB access yet" constraint. Confirmed by
- * hand against real page dumps (see repo history / README):
+ * hand against real page dumps (see repo history / README) for two listing
+ * detail templates and both catalog tabs:
  *
- *  - `supercar` listing pages: fully parsed and verified — brand, model,
- *    year, USD + KRW price, 7 specs, full photo gallery.
- *  - `encar` / `heydealer` listing pages: NOT verified against a real
- *    sample. The parser below reuses the same selectors (the site's `ta-`
- *    prefixed classes look like a shared design system used across
- *    templates), but if a real page doesn't match, `parseListingHtml`
- *    returns null and the caller (lib/data.ts) falls back to mock data —
- *    it never surfaces a garbled record.
+ *  - `supercar` listing pages (Carnect's own curated inventory): brand,
+ *    model, year, USD + KRW price, 7 specs, full photo gallery. No
+ *    condition/insurance/VIN data — this category apparently doesn't carry
+ *    it. No `application/ld+json` Vehicle block either.
+ *  - `encar` listing pages: same `ta-specs`/`ta-price` markup as supercar,
+ *    PLUS a clean `application/ld+json` Vehicle schema block (used as the
+ *    primary source for brand/model/year/fuel/transmission/color/mileage/
+ *    engine — more reliable than scraping visible text), PLUS real
+ *    accident/insurance/diagnosis data embedded as escaped JSON in the RSC
+ *    payload (Encar's own inspection report — accident counts, owner
+ *    changes, per-panel diagnosis results). No plate number anywhere, and
+ *    no plate-shaped key in that JSON either (checked `carNo`, `plateNo`,
+ *    `licensePlate`, `regNo` — none present).
+ *  - `heydealer` listing pages: NOT verified — no real sample seen yet.
+ *    Reuses the same selectors as encar/supercar (the site's `ta-`/`cd-`
+ *    prefixed classes are a shared design system); returns null and falls
+ *    back to mock data if a real page doesn't match.
  *  - Catalog pages (`/catalog`, `/catalog?tab=encar`): fully parsed and
  *    verified — used for the plate-search fallback below.
  *  - Plate search: the catalog has a real "License plate" search box, but
- *    it's wired to client JS with no visible endpoint in the static HTML.
- *    `fetchLivePlateSearch` guesses `?tab=encar&plate=<value>` (the
- *    obvious param name, matching our own API's own `?plate=` convention)
+ *    it's wired to client JS with no visible endpoint in the static HTML,
+ *    and the one detail page confirmed so far has no plate field to
+ *    cross-check against. `fetchLiveByPlate` guesses
+ *    `?tab=encar&plate=<value>` (matching our own API's `?plate=` naming)
  *    against the catalog page and parses whatever comes back. If that
  *    guess is wrong, zero cards are found and lib/data.ts falls back to
- *    mock data — same safe-degrade behavior.
+ *    mock data — same safe-degrade behavior. STILL UNCONFIRMED — the real
+ *    fix is capturing the actual network request the search box makes.
  */
 
 const BASE_URL = "https://carnect.biz";
@@ -78,7 +90,7 @@ function decodeEntities(s: string): string {
     .replace(/&gt;/g, ">");
 }
 
-function digitsOnly(s: string | undefined): number | null {
+function digitsOnly(s: string | undefined | null): number | null {
   if (!s) return null;
   const cleaned = s.replace(/[^\d]/g, "");
   return cleaned ? Number(cleaned) : null;
@@ -97,39 +109,121 @@ export function parseListingId(raw: string): { listingId: string; source: Source
   return { listingId: cleaned, source: "encar" };
 }
 
-function buildCondition(specs: Record<string, string>): VehicleCondition {
-  const grade = specs["grade"] ?? specs["condition grade"];
+interface JsonLdVehicle {
+  name?: string;
+  brand?: { name?: string };
+  model?: string;
+  vehicleModelDate?: string;
+  fuelType?: string;
+  vehicleTransmission?: string;
+  color?: string;
+  mileageFromOdometer?: { value?: number };
+  vehicleEngine?: { engineDisplacement?: { value?: number } };
+  offers?: { price?: number; priceCurrency?: string };
+}
+
+/** schema.org Vehicle markup, present on encar/heydealer's standard detail template. */
+function extractJsonLdVehicle(html: string): JsonLdVehicle | null {
+  const re = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(html))) {
+    try {
+      const obj = JSON.parse(m[1]);
+      if (obj && obj["@type"] === "Vehicle") return obj as JsonLdVehicle;
+    } catch {
+      // Not valid JSON (or not the block we want) — keep scanning.
+    }
+  }
+  return null;
+}
+
+/**
+ * Encar's real inspection/insurance data arrives as an escaped JSON blob
+ * inside the page's RSC payload (not as plain HTML), e.g.
+ * `\"insurance\":{\"myAccidentCnt\":0,\"otherAccidentCnt\":1,...}`. We pull
+ * a bounded window around the `diagnosis`/`insurance` keys and regex the
+ * fields out rather than fully unescaping and JSON.parse-ing the whole
+ * payload, since its exact boundaries aren't reliably knowable.
+ */
+function extractEncarCondition(html: string): VehicleCondition | null {
+  const anchor = html.indexOf('\\"insurance\\":{');
+  if (anchor === -1) return null;
+
+  const windowStart = Math.max(0, anchor - 6000);
+  const region = html.slice(windowStart, anchor + 2000);
+
+  const myAccidents = digitsOnly(region.match(/\\"myAccidentCnt\\":(\d+)/)?.[1]) ?? 0;
+  const otherAccidents = digitsOnly(region.match(/\\"otherAccidentCnt\\":(\d+)/)?.[1]) ?? 0;
+  const totalLoss = digitsOnly(region.match(/\\"totalLossCnt\\":(\d+)/)?.[1]) ?? 0;
+  const floodLoss = digitsOnly(region.match(/\\"floodTotalLossCnt\\":(\d+)/)?.[1]) ?? 0;
+  const ownerChanges = digitsOnly(region.match(/\\"ownerChangeCnt\\":(\d+)/)?.[1]) ?? 0;
+
+  let insurance_record: string;
+  if (totalLoss > 0 || floodLoss > 0) {
+    insurance_record = `Total/flood loss on record (${totalLoss} total loss, ${floodLoss} flood)`;
+  } else if (myAccidents === 0 && otherAccidents === 0) {
+    insurance_record = "No accident on insurance record";
+  } else {
+    const parts: string[] = [];
+    if (myAccidents > 0) parts.push(`${myAccidents} accident(s), this owner at fault`);
+    if (otherAccidents > 0) parts.push(`${otherAccidents} accident(s), other party at fault`);
+    insurance_record = parts.join("; ");
+  }
+
+  const resultCodes = [...region.matchAll(/\\"resultCode\\":\\"([A-Z]+)\\"/g)].map((m) => m[1]);
+  const diagnosis =
+    resultCodes.length === 0
+      ? "Not reported by source"
+      : `${resultCodes.filter((c) => c === "NORMAL").length}/${resultCodes.length} inspected panels normal`;
+
+  const hasInspectionReport = /\\"supplyNo\\":\\"[^"\\]+\\"/.test(region);
+
+  let grade: VehicleCondition["grade"];
+  if (totalLoss > 0 || floodLoss > 0) grade = "C";
+  else if (myAccidents > 0 || otherAccidents > 0) grade = "B";
+  else grade = "A";
+
   return {
-    grade: grade === "A" || grade === "B" || grade === "C" ? grade : "N/A",
-    insurance_record: specs["insurance"] ?? specs["insurance record"] ?? "Not reported by source",
-    diagnosis: specs["diagnosis"] ?? "Not reported by source",
-    inspection: specs["inspection"] ?? "Not reported by source",
-    owner_changes: digitsOnly(specs["owner changes"]) ?? 0,
+    grade,
+    insurance_record,
+    diagnosis,
+    inspection: hasInspectionReport ? "Inspection report available" : "Not reported by source",
+    owner_changes: ownerChanges,
   };
 }
 
 function extractPhotos(html: string): string[] {
-  const photos = new Set<string>();
+  const seen = new Set<string>(); // dedupe by path, ignoring crop/query params
+  const photos: string[] = [];
+  const add = (url: string) => {
+    const key = url.split("?")[0];
+    if (seen.has(key)) return;
+    seen.add(key);
+    photos.push(url);
+  };
 
   const apiImgRe = /\/api\/images\/[a-zA-Z0-9_-]+\/[a-zA-Z0-9-]+/g;
   let m: RegExpExecArray | null;
-  while ((m = apiImgRe.exec(html))) {
-    photos.add(`${BASE_URL}${m[0]}`);
-  }
+  while ((m = apiImgRe.exec(html))) add(`${BASE_URL}${m[0]}`);
 
-  // Next/Image-proxied external photos (HeyDealer S3, Carnect's own Encar CDN mirror).
+  // Encar/HeyDealer's own CDN, embedded directly as real <img src> tags.
+  const directImgRe = /src="(https:\/\/img\.carnect\.biz\/[^"]+)"/g;
+  while ((m = directImgRe.exec(html))) add(decodeEntities(m[1]));
+
+  // Next/Image-proxied external photos (HeyDealer S3, catalog thumbnails).
   const nextImgRe = /_next\/image\?url=([^&"]+)/g;
   while ((m = nextImgRe.exec(html))) {
     const decoded = decodeURIComponent(m[1]);
-    if (decoded.startsWith("http")) photos.add(decoded);
+    if (decoded.startsWith("http")) add(decoded);
   }
 
-  return [...photos];
+  return photos;
 }
 
 /**
  * Split a title string on the double-comment marker React/Next.js emits
  * between two adjacent JSX text expressions (`{brand}<!-- --> <!-- -->{model}`).
+ * Confirmed on both catalog cards and the encar detail page's `<h1>`.
  * Falls back to treating the whole string as the model with no brand split.
  */
 function splitBrandModel(raw: string): { brand: string; model: string } {
@@ -142,24 +236,28 @@ function splitBrandModel(raw: string): { brand: string; model: string } {
 }
 
 function parseListingHtml(html: string, listingId: string, source: Source): Vehicle | null {
+  const jsonLd = extractJsonLdVehicle(html);
   const marqueM = html.match(/car-lux__marque">([^<]+)</);
-  const h1M = html.match(/<h1>([\s\S]*?)<\/h1>/);
-  if (!h1M) return null; // No recognizable title — don't guess, let the caller fall back.
+  const h1M = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/);
 
-  let brand: string;
-  let model: string;
-  if (marqueM) {
+  let brand = "";
+  let model = "";
+  if (jsonLd?.brand?.name && jsonLd?.model) {
+    brand = jsonLd.brand.name.trim();
+    model = jsonLd.model.trim();
+  } else if (marqueM && h1M) {
     brand = decodeEntities(marqueM[1]).trim();
     model = decodeEntities(h1M[1]).replace(/<!--.*?-->/g, "").trim();
-  } else {
+  } else if (h1M) {
     ({ brand, model } = splitBrandModel(h1M[1]));
+  } else {
+    return null; // No recognizable title anywhere — don't guess, let the caller fall back.
   }
+
   const titleEn = [brand, model].filter(Boolean).join(" ").trim();
   if (!titleEn) return null;
 
-  const yearM = html.match(/car-lux__year">(\d{4})</);
-  const priceUsdM = html.match(/ta-price__val">\$([\d,]+)</);
-  const priceKrwM = html.match(/Source price[^₩]*₩([\d,]+)/);
+  const priceKrwM = html.match(/ta-price__sub">[\s\S]*?₩([\d,]+)/);
   if (!priceKrwM) return null; // No price — treat as unparsed, fall back to mock.
 
   const specs: Record<string, string> = {};
@@ -169,8 +267,20 @@ function parseListingHtml(html: string, listingId: string, source: Source): Vehi
     specs[sm[1].trim().toLowerCase()] = decodeEntities(sm[2].trim());
   }
 
+  const yearM = html.match(/car-lux__year">(\d{4})</);
   const regDate = specs["reg. date"] ?? specs["reg date"] ?? "";
-  const year = yearM ? Number(yearM[1]) : Number(regDate.match(/\d{4}/)?.[0]) || 0;
+  const year =
+    (yearM ? Number(yearM[1]) : null) ??
+    digitsOnly(jsonLd?.vehicleModelDate ?? undefined) ??
+    (Number(regDate.match(/\d{4}/)?.[0]) || 0);
+
+  const condition = extractEncarCondition(html) ?? {
+    grade: "N/A",
+    insurance_record: "Not reported by source",
+    diagnosis: "Not reported by source",
+    inspection: "Not reported by source",
+    owner_changes: 0,
+  };
 
   return {
     listing_id: listingId,
@@ -185,15 +295,15 @@ function parseListingHtml(html: string, listingId: string, source: Source): Vehi
     trim: "", // Not separable from `model` without more samples — see README.
     year,
     reg_date: regDate,
-    mileage_km: digitsOnly(specs["mileage"]) ?? 0,
-    fuel: specs["fuel"] ?? "",
-    transmission: specs["transmission"] ?? "",
-    engine_cc: digitsOnly(specs["engine"]),
-    color: specs["color"] ?? "",
+    mileage_km: digitsOnly(specs["mileage"]) ?? jsonLd?.mileageFromOdometer?.value ?? 0,
+    fuel: specs["fuel"] ?? jsonLd?.fuelType ?? "",
+    transmission: specs["transmission"] ?? jsonLd?.vehicleTransmission ?? "",
+    engine_cc: digitsOnly(specs["engine"]) ?? jsonLd?.vehicleEngine?.engineDisplacement?.value ?? null,
+    color: specs["color"] ?? jsonLd?.color ?? "",
     body: specs["body type"] ?? specs["body"] ?? "",
     price_krw: Number(priceKrwM[1].replace(/,/g, "")),
     photos: extractPhotos(html),
-    condition: buildCondition(specs),
+    condition,
     updated_at: new Date().toISOString(),
     data_origin: "live",
   };
