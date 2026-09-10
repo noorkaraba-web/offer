@@ -390,11 +390,10 @@ the listing's own live price server-side (the batch flow below does this, since 
   card), same for every language. Previously it followed the RTL "start" side, which
   would put it top-*right* on Arabic cards — fixed, since a brand mark's position
   shouldn't move with text direction.
-- **Footer bar** — every card now ends with `KARABA · WhatsApp {number} · carnect.biz`
-  (`lib/brand.ts`), the same string in every language (a brand name, phone number, and
-  domain aren't things you translate), replacing the old per-language tagline.
-  **`WHATSAPP_NUMBER` in `lib/brand.ts` is a placeholder** — `+82-XX-XXXX-XXXX`. You
-  asked me to ask: what's the real number? One-line fix once you give it to me.
+- **Footer bar** — every card now ends with `KARABA · WhatsApp +82-10-9671-2799 ·
+  carnect.biz` (`lib/brand.ts`), the same string in every language (a brand name,
+  phone number, and domain aren't things you translate), replacing the old
+  per-language tagline.
 
 **Multi-car catalog export.** Since there's still no crawler DB to browse/multi-select
 listings from (the standing constraint since the very first "live data" round), the
