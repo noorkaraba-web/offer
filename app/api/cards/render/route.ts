@@ -8,7 +8,10 @@ export async function POST(req: NextRequest) {
   const source = body?.source;
   const lang = body?.lang;
   const currency = body?.currency;
-  const landedPrice = body?.landed_price;
+  // car_price, if omitted, is computed by /api/cards/vehicle itself from the
+  // listing's live price — see that route's own doc comment.
+  const carPrice = body?.car_price;
+  const shipping = body?.shipping;
 
   if (!id) {
     return NextResponse.json({ error: "listing_id is required" }, { status: 400 });
@@ -23,7 +26,8 @@ export async function POST(req: NextRequest) {
     ...(source ? { source } : {}),
     ...(lang ? { lang } : {}),
     ...(currency ? { currency } : {}),
-    ...(landedPrice != null ? { landedPrice: String(landedPrice) } : {}),
+    ...(carPrice != null ? { carPrice: String(carPrice) } : {}),
+    ...(shipping != null ? { shipping: String(shipping) } : {}),
   }).toString();
 
   return NextResponse.json({

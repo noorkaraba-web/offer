@@ -359,3 +359,72 @@ is only used for the 5 `[lang]` values, not per-listing — each request fetches
 same caching as the rest of the app via `lib/carnect-source.ts`'s 6h cache). No
 sitemap. No per-listing Telegram-specific `og:image` sizing (Telegram is generally
 satisfied by the same Open Graph tags WhatsApp uses).
+
+## Price breakdown, real branding, and multi-car catalog export
+
+Clarified priority: buyers get **images** on WhatsApp, not links — the PNG cards are
+what replace the manual Canva/Excel work, and the public catalog pages above are a
+secondary, complementary channel (kept, per your last message — "links and images are
+both useful").
+
+**Price breakdown on the vehicle card.** `ShareToWhatsAppBlock` now has exactly the
+three inputs asked for: car price (KRW, pre-filled from the listing, editable),
+shipping cost (typed directly in the selected display currency), and the computed
+total. The card (`app/api/cards/vehicle/route.tsx`) shows the two as small breakdown
+lines and the total in a highlighted box labelled "Price including delivery" (translated
+in all 5 languages via new `carPriceLabel`/`shippingCostLabel`/`priceIncludingDelivery`
+keys in `lib/i18n/cards.ts`, replacing the old single `landedPrice` line). The route's
+`carPrice` query param is now optional — pass it pre-converted to override (the
+single-car flow does, since staff can edit the price); omit it and the route converts
+the listing's own live price server-side (the batch flow below does this, since editing
+20 prices by hand isn't practical).
+
+**Branding, three parts:**
+- **Palette** — replaced the generic dark-navy scheme with colours sourced from your
+  own standalone Deal Calculator tool's CSS (`--bg:#1B1E26`, `--gold:#D9A441`,
+  `--green:#4FAE82`, `--red:#D9685F`) in `lib/og-card-shared.tsx`. This is the one
+  concrete piece of your actual brand identity available in this project (I don't have
+  a brand guide) — "my colours, not Encar's" now means colours pulled from something
+  that's actually yours, not a fresh guess.
+- **Logo position** — pinned physically top-left on both cards (and the new cover
+  card), same for every language. Previously it followed the RTL "start" side, which
+  would put it top-*right* on Arabic cards — fixed, since a brand mark's position
+  shouldn't move with text direction.
+- **Footer bar** — every card now ends with `KARABA · WhatsApp {number} · carnect.biz`
+  (`lib/brand.ts`), the same string in every language (a brand name, phone number, and
+  domain aren't things you translate), replacing the old per-language tagline.
+  **`WHATSAPP_NUMBER` in `lib/brand.ts` is a placeholder** — `+82-XX-XXXX-XXXX`. You
+  asked me to ask: what's the real number? One-line fix once you give it to me.
+
+**Multi-car catalog export.** Since there's still no crawler DB to browse/multi-select
+listings from (the standing constraint since the very first "live data" round), the
+flow mirrors the existing Offer Builder: look a car up, hit **+ Add to batch** on its
+detail page (`components/CatalogExportToggle.tsx`), repeat for 5–20 cars — the
+selection persists in `localStorage` via `lib/catalog-export-context.tsx`, same pattern
+as `offer-draft-context.tsx`. A new **Catalog** link in the header (with a count badge)
+goes to `/catalog-export`, where you pick one language + currency + a single shared
+shipping cost (applied to every car in the batch — editing 20 individual prices isn't
+practical; if one car needs a different number, adjust it on its own detail page
+first) and hit **Generate & Download ZIP**. That:
+1. Renders a new branded cover card (`/api/cards/cover` — logo, "N Vehicles" in the
+   chosen language, footer) via `next/og`, same as the other two card routes.
+2. Fetches one vehicle card per selected car (no per-car price override — each uses
+   its own live listing price + the shared shipping cost, per the optional-`carPrice`
+   change above).
+3. Zips everything client-side with `jszip` (`00-cover.png`, `01-<id>.png`, ...) and
+   triggers a single browser download.
+
+Deliberately out of scope for the batch export: inspection-report cards aren't
+included (the ask was "one image per car" — the fuller per-car breakdown stays a
+single-car thing on its own detail page), and there's no server-side zip endpoint —
+it's assembled in the browser from the same PNG URLs the single-car flow already uses,
+so there's exactly one code path generating card images, not two.
+
+**A dependency that needs `npm install` to actually prove out**: `jszip` was added to
+`package.json`, but like everything else in this sandbox, its actual browser behavior
+(fetching N PNG blobs, zipping, triggering a download) couldn't be run end-to-end —
+no dev server, no browser here. The code follows JSZip's documented API closely
+(`new JSZip()`, `.file(name, blob)`, `.generateAsync({type:'blob'})`); please smoke-test
+the "Generate & Download ZIP" button once this deploys somewhere with `npm install`
+available, since that flow specifically is the one part of this round I couldn't
+verify by any means (not even the ts-node harness — it needs a real browser).

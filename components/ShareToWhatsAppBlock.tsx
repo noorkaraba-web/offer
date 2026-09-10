@@ -3,13 +3,22 @@
 import { useEffect, useRef, useState } from "react";
 import { Vehicle, Currency, FxRates } from "@/lib/types";
 import { convertFromKrw } from "@/lib/fx";
+import { formatMoney } from "@/lib/pricing";
 import { CARD_LANGUAGES, CardLang } from "@/lib/i18n/cards";
 
 const CURRENCIES: Currency[] = ["USD", "EUR", "AED", "KRW", "JPY", "GBP", "CAD", "AUD"];
 
-export default function ShareToWhatsAppBlock({ vehicle, fobPriceKrw }: { vehicle: Vehicle; fobPriceKrw: number }) {
+/**
+ * The simple price breakdown the cards actually need — car price (from the
+ * listing, editable) + shipping (typed in directly, in the card's display
+ * currency) = the total the card shows as "price including delivery". Not
+ * the old Deal Calculator: three numbers, nothing else.
+ */
+export default function ShareToWhatsAppBlock({ vehicle }: { vehicle: Vehicle }) {
   const [lang, setLang] = useState<CardLang>("en");
   const [currency, setCurrency] = useState<Currency>("USD");
+  const [carPriceKrw, setCarPriceKrw] = useState(vehicle.price_krw);
+  const [shipping, setShipping] = useState<number | "">("");
   const [rates, setRates] = useState<FxRates | null>(null);
   const [generated, setGenerated] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -26,17 +35,17 @@ export default function ShareToWhatsAppBlock({ vehicle, fobPriceKrw }: { vehicle
       .catch(() => setRates(null));
   }, []);
 
-  // Landed price is derived from the FOB price field above, not typed
-  // manually here — it updates automatically as that field or the currency
-  // selector below changes.
-  const landedPrice = rates ? Math.round(convertFromKrw(fobPriceKrw, currency, rates)) : 0;
+  const carPriceDisplay = rates ? Math.round(convertFromKrw(carPriceKrw, currency, rates)) : 0;
+  const shippingDisplay = shipping === "" ? 0 : shipping;
+  const total = carPriceDisplay + shippingDisplay;
 
   const qs = new URLSearchParams({
     id: vehicle.listing_id,
     source: vehicle.source,
     lang,
     currency,
-    landedPrice: String(landedPrice || 0),
+    carPrice: String(carPriceDisplay),
+    shipping: String(shippingDisplay),
   }).toString();
   const vehicleCardUrl = `/api/cards/vehicle?${qs}`;
   const inspectionCardUrl = `/api/cards/condition?${qs}`;
@@ -44,7 +53,7 @@ export default function ShareToWhatsAppBlock({ vehicle, fobPriceKrw }: { vehicle
   const summary = [
     vehicle.title_en,
     `${vehicle.year} · ${vehicle.mileage_km.toLocaleString("en-US")} km`,
-    landedPrice ? `Landed price: ${currency} ${Number(landedPrice).toLocaleString("en-US")}` : "",
+    `Price including delivery: ${formatMoney(total, currency)}`,
     vehicle.url,
   ]
     .filter(Boolean)
@@ -56,8 +65,8 @@ export default function ShareToWhatsAppBlock({ vehicle, fobPriceKrw }: { vehicle
     <div className="rounded-xl border border-navy-border bg-navy-surface p-4">
       <h3 className="text-sm font-semibold text-navy-text">📤 Share to WhatsApp</h3>
       <p className="mt-1 text-xs text-navy-muted">
-        Pick the customer&rsquo;s language, then share the public catalog link below or generate PNG
-        cards. Landed price on the cards comes from the FOB price field above.
+        Pick the customer&rsquo;s language, set the shipping cost, then share the public catalog link
+        or generate PNG cards.
       </p>
 
       <div className="mt-3 flex flex-wrap gap-2">
@@ -92,6 +101,28 @@ export default function ShareToWhatsAppBlock({ vehicle, fobPriceKrw }: { vehicle
         </button>
       </div>
 
+      <div className="mt-4 grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-xs uppercase tracking-wide text-navy-muted">Car price (KRW)</label>
+          <input
+            type="number"
+            value={carPriceKrw}
+            onChange={(e) => setCarPriceKrw(Number(e.target.value) || 0)}
+            className="mt-1 w-full rounded-md border border-navy-border bg-navy-surface2 px-2 py-1.5 text-sm text-navy-text"
+          />
+        </div>
+        <div>
+          <label className="text-xs uppercase tracking-wide text-navy-muted">Shipping ({currency})</label>
+          <input
+            type="number"
+            value={shipping}
+            placeholder="0"
+            onChange={(e) => setShipping(e.target.value === "" ? "" : Number(e.target.value))}
+            className="mt-1 w-full rounded-md border border-navy-border bg-navy-surface2 px-2 py-1.5 text-sm text-navy-text"
+          />
+        </div>
+      </div>
+
       <div className="mt-3 flex gap-2">
         <select
           value={currency}
@@ -104,8 +135,9 @@ export default function ShareToWhatsAppBlock({ vehicle, fobPriceKrw }: { vehicle
             </option>
           ))}
         </select>
-        <div className="flex flex-1 items-center rounded-md border border-navy-border bg-navy-surface2 px-3 py-2 text-sm text-navy-text">
-          {rates ? landedPrice.toLocaleString("en-US") : "Loading rates…"}
+        <div className="flex flex-1 items-center justify-between rounded-md border border-navy-border bg-navy-surface2 px-3 py-2 text-sm text-navy-text">
+          <span className="text-navy-muted">Total</span>
+          <span className="font-semibold">{rates ? formatMoney(total, currency) : "Loading rates…"}</span>
         </div>
         <button
           onClick={() => setGenerated(true)}

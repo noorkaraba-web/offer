@@ -7,21 +7,37 @@ import { CardLang, dirFor, t, statusLabel } from "@/lib/i18n/cards";
 import { translateTerm } from "@/lib/i18n/condition-terms";
 import { Currency } from "@/lib/types";
 import { formatMoney } from "@/lib/pricing";
+import { getFxRates, convertFromKrw } from "@/lib/fx";
 
 export const runtime = "edge";
 
-// GET /api/cards/vehicle?id=&source=&lang=&currency=&landedPrice= — vehicle share card PNG.
+// GET /api/cards/vehicle?id=&source=&lang=&currency=&carPrice=&shipping= —
+// vehicle share card PNG. `carPrice` is optional: pass it pre-converted
+// into `currency` to override the listing price (the single-car share flow
+// does this, since staff can edit the price); omit it and this route
+// converts the vehicle's own live price_krw itself (the batch/catalog
+// export flow does this — no per-car price editing there).
 export async function GET(req: NextRequest) {
   const { searchParams, origin } = new URL(req.url);
   const id = searchParams.get("id");
   const source = searchParams.get("source") ?? undefined;
   const lang = (searchParams.get("lang") as CardLang) || "en";
   const currency = (searchParams.get("currency") as Currency) || "USD";
-  const landedPrice = Number(searchParams.get("landedPrice")) || 0;
+  const carPriceParam = searchParams.get("carPrice");
+  const shipping = Number(searchParams.get("shipping")) || 0;
   if (!id) return new Response("id is required", { status: 400 });
 
   const vehicle = await findByListingId(id, source);
   if (!vehicle) return new Response("not found", { status: 404 });
+
+  let carPrice: number;
+  if (carPriceParam !== null) {
+    carPrice = Number(carPriceParam) || 0;
+  } else {
+    const rates = await getFxRates().catch(() => null);
+    carPrice = rates ? Math.round(convertFromKrw(vehicle.price_krw, currency, rates)) : 0;
+  }
+  const total = carPrice + shipping;
 
   const [fonts, logoSrc] = await Promise.all([loadOgFonts(), tryLoadLogo(origin)]);
   const rtl = dirFor(lang) === "rtl";
@@ -32,7 +48,7 @@ export async function GET(req: NextRequest) {
   // ── Dynamic height: the damage list can wrap across several lines
   // depending on how many panels are affected and how long their
   // translated names are — a fixed height risked clipping it. ──
-  const BASE_H = 330; // header + title + specs/VIN + price banner + footer
+  const BASE_H = 380; // header + title + specs/VIN + price breakdown + footer
   const PHOTOS_H = photos.length > 0 ? 175 : 0;
   const DAMAGE_H = affected.length > 0 ? 50 + Math.ceil(affected.length / 3) * 26 : 0;
   const CARD_HEIGHT = Math.max(MIN_CARD_HEIGHT, BASE_H + PHOTOS_H + DAMAGE_H);
@@ -54,7 +70,7 @@ export async function GET(req: NextRequest) {
         }}
       >
         <div style={{ display: "flex", flexDirection: "column", width: "100%" }}>
-          <CardHeader logoSrc={logoSrc} plate={vehicle.plate} lang={lang} />
+          <CardHeader logoSrc={logoSrc} plate={vehicle.plate} />
 
           <div
             style={{
@@ -143,23 +159,58 @@ export async function GET(req: NextRequest) {
           <div
             style={{
               display: "flex",
-              flexDirection: rtl ? "row-reverse" : "row",
-              justifyContent: "space-between",
-              alignItems: "center",
-              background: COLORS.green,
+              flexDirection: "column",
               borderRadius: 10,
+              background: COLORS.surface2,
               padding: "14px 20px",
               marginBottom: 14,
+              gap: 6,
             }}
           >
-            <span style={{ display: "flex", fontSize: 18, color: "#052e16", fontWeight: 600 }}>
-              {t(lang, "landedPrice")}
-            </span>
-            <span style={{ display: "flex", fontSize: 30, fontWeight: 700, color: "#052e16" }}>
-              {formatMoney(landedPrice, currency)}
-            </span>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: rtl ? "row-reverse" : "row",
+                justifyContent: "space-between",
+                fontSize: 15,
+                color: COLORS.muted,
+              }}
+            >
+              <span style={{ display: "flex" }}>{t(lang, "carPriceLabel")}</span>
+              <span style={{ display: "flex" }}>{formatMoney(carPrice, currency)}</span>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: rtl ? "row-reverse" : "row",
+                justifyContent: "space-between",
+                fontSize: 15,
+                color: COLORS.muted,
+              }}
+            >
+              <span style={{ display: "flex" }}>{t(lang, "shippingCostLabel")}</span>
+              <span style={{ display: "flex" }}>{formatMoney(shipping, currency)}</span>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                flexDirection: rtl ? "row-reverse" : "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                borderTop: `1px solid ${COLORS.border}`,
+                marginTop: 4,
+                paddingTop: 10,
+              }}
+            >
+              <span style={{ display: "flex", fontSize: 18, color: COLORS.gold, fontWeight: 600 }}>
+                {t(lang, "priceIncludingDelivery")}
+              </span>
+              <span style={{ display: "flex", fontSize: 30, fontWeight: 700, color: COLORS.gold }}>
+                {formatMoney(total, currency)}
+              </span>
+            </div>
           </div>
-          <CardFooter tagline={`${t(lang, "brand")} · ${t(lang, "footerTagline")}`} dateLabel={new Date().toLocaleDateString()} />
+          <CardFooter dateLabel={new Date().toLocaleDateString()} />
         </div>
       </div>
     ),

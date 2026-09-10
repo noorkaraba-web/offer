@@ -8,12 +8,13 @@ import { useOfferDraft } from "@/lib/offer-draft-context";
 import ShareToWhatsAppBlock from "./ShareToWhatsAppBlock";
 
 /**
- * Simple FOB price + WhatsApp share, replacing the earlier Deal Calculator
- * port — not wanted in this buyer-facing app. Just one editable price field,
- * pre-filled from the listing, feeding both "Add to offer" and the share cards.
+ * "Add to offer" (the multi-car Offer Builder, a separate PRD flow) plus the
+ * WhatsApp share block. Each owns its own editable car-price field rather
+ * than sharing one — they're independent flows (an offer draft vs. a single
+ * share card) and don't need to stay in sync with each other.
  */
 export default function VehiclePricing({ vehicle }: { vehicle: Vehicle }) {
-  const [fobPriceKrw, setFobPriceKrw] = useState(vehicle.price_krw);
+  const [priceKrw, setPriceKrw] = useState(vehicle.price_krw);
   const [rates, setRates] = useState<FxRates | null>(null);
 
   const { addItem, updateItem, removeItem, hasItem } = useOfferDraft();
@@ -31,7 +32,7 @@ export default function VehiclePricing({ vehicle }: { vehicle: Vehicle }) {
       listing_id: vehicle.listing_id,
       source: vehicle.source,
       title_en: vehicle.title_en,
-      price_krw: fobPriceKrw,
+      price_krw: priceKrw,
       auction_fee_krw: 0,
       carnect_fee_krw: 0,
       inland_krw: 0,
@@ -43,18 +44,18 @@ export default function VehiclePricing({ vehicle }: { vehicle: Vehicle }) {
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-navy-border bg-navy-surface p-4">
-        <h3 className="text-sm font-semibold text-navy-text">FOB price</h3>
-        <label className="mt-3 block text-xs uppercase tracking-wide text-navy-muted">FOB price (KRW)</label>
+        <h3 className="text-sm font-semibold text-navy-text">Add to offer</h3>
+        <label className="mt-3 block text-xs uppercase tracking-wide text-navy-muted">Car price (KRW)</label>
         <input
           type="number"
-          value={fobPriceKrw}
-          onChange={(e) => setFobPriceKrw(Number(e.target.value) || 0)}
+          value={priceKrw}
+          onChange={(e) => setPriceKrw(Number(e.target.value) || 0)}
           className="mt-1 w-full rounded-md border border-navy-border bg-navy-surface2 px-3 py-2 text-sm text-navy-text"
         />
         {rates && (
           <p className="mt-2 text-sm text-navy-muted">
-            {formatMoney(convertFromKrw(fobPriceKrw, "USD", rates), "USD")} ·{" "}
-            {formatMoney(convertFromKrw(fobPriceKrw, "EUR", rates), "EUR")}
+            {formatMoney(convertFromKrw(priceKrw, "USD", rates), "USD")} ·{" "}
+            {formatMoney(convertFromKrw(priceKrw, "EUR", rates), "EUR")}
           </p>
         )}
 
@@ -74,7 +75,7 @@ export default function VehiclePricing({ vehicle }: { vehicle: Vehicle }) {
         )}
       </div>
 
-      <ShareToWhatsAppBlock vehicle={vehicle} fobPriceKrw={fobPriceKrw} />
+      <ShareToWhatsAppBlock vehicle={vehicle} />
     </div>
   );
 }

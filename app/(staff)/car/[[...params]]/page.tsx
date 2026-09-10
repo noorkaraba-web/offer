@@ -5,6 +5,7 @@ import VehicleHeader from "@/components/VehicleHeader";
 import SpecGrid from "@/components/SpecGrid";
 import ConditionAccidentBlock from "@/components/ConditionAccidentBlock";
 import VehiclePricing from "@/components/VehiclePricing";
+import CatalogExportToggle from "@/components/CatalogExportToggle";
 
 const SOURCE_LABEL: Record<string, string> = {
   encar: "Encar",
@@ -43,6 +44,7 @@ export default async function VehicleDetailPage({
 
       <ConditionAccidentBlock condition={vehicle.condition} />
       <VehiclePricing vehicle={vehicle} />
+      <CatalogExportToggle vehicle={vehicle} />
       <SpecGrid vehicle={vehicle} />
     </div>
   );

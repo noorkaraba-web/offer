@@ -86,7 +86,7 @@ export async function GET(req: NextRequest) {
         }}
       >
         <div style={{ display: "flex", flexDirection: "column", width: "100%" }}>
-          <CardHeader logoSrc={logoSrc} plate={vehicle.plate} lang={lang} />
+          <CardHeader logoSrc={logoSrc} plate={vehicle.plate} />
 
           <div
             style={{
@@ -246,7 +246,7 @@ export async function GET(req: NextRequest) {
           )}
         </div>
 
-        <CardFooter tagline={`${t(lang, "brand")} · ${t(lang, "footerTagline")}`} dateLabel={new Date().toLocaleDateString()} />
+        <CardFooter dateLabel={new Date().toLocaleDateString()} />
       </div>
     ),
     { width: CARD_WIDTH, height: CARD_HEIGHT, fonts }

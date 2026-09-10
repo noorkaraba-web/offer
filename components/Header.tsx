@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useOfferDraft } from "@/lib/offer-draft-context";
+import { useCatalogExport } from "@/lib/catalog-export-context";
 
 export default function Header() {
   const { items } = useOfferDraft();
+  const { items: catalogItems } = useCatalogExport();
   const pathname = usePathname();
 
   const navLink = (href: string, label: string) => (
@@ -28,6 +30,19 @@ export default function Header() {
         <nav className="flex items-center gap-5">
           {navLink("/", "Lookup")}
           {navLink("/offers", "History")}
+          <Link
+            href="/catalog-export"
+            className={`relative flex items-center gap-1 text-sm font-medium ${
+              pathname === "/catalog-export" ? "text-white" : "text-white/70 hover:text-white"
+            }`}
+          >
+            Catalog
+            {catalogItems.length > 0 && (
+              <span className="rounded-full bg-white/20 px-1.5 py-0.5 text-xs text-white">
+                {catalogItems.length}
+              </span>
+            )}
+          </Link>
           <Link
             href="/offers/new"
             className="relative flex items-center gap-1 rounded-full bg-carnect-accent px-3 py-1.5 text-sm font-semibold text-carnect"

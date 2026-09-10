@@ -15,8 +15,9 @@ export const CARD_LANGUAGES: { code: CardLang; label: string; dir: "ltr" | "rtl"
 ];
 
 type StringKey =
-  | "listingPrice"
-  | "landedPrice"
+  | "carPriceLabel"
+  | "shippingCostLabel"
+  | "priceIncludingDelivery"
   | "regDate"
   | "mileage"
   | "vin"
@@ -37,19 +38,20 @@ type StringKey =
   | "welded"
   | "corrosion"
   | "unknownStatus"
-  | "brand"
-  | "footerTagline"
   | "structuralRepairsTitle"
   | "waterDamage"
   | "modification"
   | "recall"
   | "basicStructureDamage"
-  | "allPanelsNormal";
+  | "allPanelsNormal"
+  | "vehiclesCount"
+  | "catalogCoverTagline";
 
 const STRINGS: Record<CardLang, Record<StringKey, string>> = {
   en: {
-    listingPrice: "Listing price",
-    landedPrice: "Landed price",
+    carPriceLabel: "Car price",
+    shippingCostLabel: "Shipping",
+    priceIncludingDelivery: "Price including delivery",
     regDate: "Reg. date",
     mileage: "Mileage",
     vin: "VIN",
@@ -70,18 +72,19 @@ const STRINGS: Record<CardLang, Record<StringKey, string>> = {
     welded: "Welded / panel beaten",
     corrosion: "Corrosion",
     unknownStatus: "Reported",
-    brand: "CARNECT",
-    footerTagline: "Korean Used Car Exporter",
     structuralRepairsTitle: "Structural repairs",
     waterDamage: "Water damage",
     modification: "Modification",
     recall: "Recall",
     basicStructureDamage: "Basic structure",
     allPanelsNormal: "All panels normal",
+    vehiclesCount: "{n} Vehicles",
+    catalogCoverTagline: "Turnkey price with delivery",
   },
   ar: {
-    listingPrice: "سعر الإدراج",
-    landedPrice: "السعر شامل الشحن",
+    carPriceLabel: "سعر السيارة",
+    shippingCostLabel: "الشحن",
+    priceIncludingDelivery: "السعر شامل التوصيل",
     regDate: "تاريخ التسجيل",
     mileage: "المسافة المقطوعة",
     vin: "رقم الهيكل",
@@ -102,18 +105,19 @@ const STRINGS: Record<CardLang, Record<StringKey, string>> = {
     welded: "لحام / طرق",
     corrosion: "تآكل",
     unknownStatus: "تم الإبلاغ عنه",
-    brand: "كارنكت",
-    footerTagline: "مُصدّر سيارات كورية مستعملة",
     structuralRepairsTitle: "إصلاحات الهيكل",
     waterDamage: "ضرر المياه",
     modification: "تعديل",
     recall: "استدعاء",
     basicStructureDamage: "الهيكل الأساسي",
     allPanelsNormal: "جميع الألواح طبيعية",
+    vehiclesCount: "{n} سيارة",
+    catalogCoverTagline: "سعر جاهز شامل التوصيل",
   },
   ru: {
-    listingPrice: "Цена",
-    landedPrice: "Цена с доставкой",
+    carPriceLabel: "Цена автомобиля",
+    shippingCostLabel: "Доставка",
+    priceIncludingDelivery: "Цена с доставкой",
     regDate: "Дата регистрации",
     mileage: "Пробег",
     vin: "VIN",
@@ -134,18 +138,19 @@ const STRINGS: Record<CardLang, Record<StringKey, string>> = {
     welded: "Сварка / рихтовка",
     corrosion: "Коррозия",
     unknownStatus: "Указано",
-    brand: "CARNECT",
-    footerTagline: "Экспорт подержанных автомобилей из Кореи",
     structuralRepairsTitle: "Кузовной ремонт",
     waterDamage: "Затопление",
     modification: "Модификация",
     recall: "Отзыв",
     basicStructureDamage: "Повреждение кузова",
     allPanelsNormal: "Все панели в норме",
+    vehiclesCount: "{n} автомобилей",
+    catalogCoverTagline: "Цена под ключ с доставкой",
   },
   fr: {
-    listingPrice: "Prix affiché",
-    landedPrice: "Prix rendu (livré)",
+    carPriceLabel: "Prix du véhicule",
+    shippingCostLabel: "Livraison",
+    priceIncludingDelivery: "Prix, livraison incluse",
     regDate: "Date d'immatriculation",
     mileage: "Kilométrage",
     vin: "VIN",
@@ -166,18 +171,19 @@ const STRINGS: Record<CardLang, Record<StringKey, string>> = {
     welded: "Soudé / redressé",
     corrosion: "Corrosion",
     unknownStatus: "Signalé",
-    brand: "CARNECT",
-    footerTagline: "Exportateur de voitures d'occasion coréennes",
     structuralRepairsTitle: "Réparations structurelles",
     waterDamage: "Dégât des eaux",
     modification: "Modification",
     recall: "Rappel",
     basicStructureDamage: "Structure de base",
     allPanelsNormal: "Tous les panneaux sont normaux",
+    vehiclesCount: "{n} véhicules",
+    catalogCoverTagline: "Prix clé en main, livraison incluse",
   },
   es: {
-    listingPrice: "Precio de venta",
-    landedPrice: "Precio total (con envío)",
+    carPriceLabel: "Precio del vehículo",
+    shippingCostLabel: "Envío",
+    priceIncludingDelivery: "Precio con envío incluido",
     regDate: "Fecha de matriculación",
     mileage: "Kilometraje",
     vin: "VIN",
@@ -198,14 +204,14 @@ const STRINGS: Record<CardLang, Record<StringKey, string>> = {
     welded: "Soldado / enderezado",
     corrosion: "Corrosión",
     unknownStatus: "Reportado",
-    brand: "CARNECT",
-    footerTagline: "Exportador de coches usados de Corea",
     structuralRepairsTitle: "Reparaciones estructurales",
     waterDamage: "Daño por agua",
     modification: "Modificación",
     recall: "Retirada (recall)",
     basicStructureDamage: "Estructura básica",
     allPanelsNormal: "Todos los paneles normales",
+    vehiclesCount: "{n} vehículos",
+    catalogCoverTagline: "Precio llave en mano con entrega",
   },
 };
 

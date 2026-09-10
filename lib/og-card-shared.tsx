@@ -1,4 +1,4 @@
-import { CardLang, dirFor } from "./i18n/cards";
+import { cardFooterText } from "./brand";
 
 export const CARD_WIDTH = 1200;
 // Both card routes compute their own height dynamically (content varies a
@@ -6,18 +6,27 @@ export const CARD_WIDTH = 1200;
 // one's full checklist), with 675 as the shared minimum.
 export const MIN_CARD_HEIGHT = 675;
 
+/**
+ * Card palette — sourced from the user's own Deal Calculator tool
+ * (index.html's `:root` CSS variables: --bg, --gold, --green, --red), not
+ * invented. "My colours, not Encar's" — this is the closest real evidence
+ * of the brand's actual identity available, rather than the generic dark
+ * navy this project used before.
+ */
 export const COLORS = {
-  bg: "#0a0e1a",
-  surface: "#121829",
-  surface2: "#181f35",
-  border: "#232c44",
-  text: "#f2f4f8",
-  muted: "#8b93a7",
-  plate: "#f2b705",
-  plateText: "#1a1305",
-  green: "#22c55e",
-  red: "#ef4444",
-  amber: "#f59e0b",
+  bg: "#1B1E26",
+  surface: "#242833",
+  surface2: "#2C313D",
+  border: "#3A3F4D",
+  text: "#E7E9EE",
+  muted: "#8B92A3",
+  plate: "#D9A441",
+  plateText: "#1B1E26",
+  green: "#4FAE82",
+  red: "#D9685F",
+  amber: "#D9A441",
+  gold: "#D9A441",
+  goldDim: "#A87E36",
 };
 
 /**
@@ -53,31 +62,27 @@ export async function tryLoadLogo(origin: string): Promise<string | null> {
   }
 }
 
-export function CardHeader({
-  logoSrc,
-  plate,
-  lang,
-}: {
-  logoSrc: string | null;
-  plate: string | null;
-  lang: CardLang;
-}) {
-  const rtl = dirFor(lang) === "rtl";
+/**
+ * Logo is pinned physically top-left and the plate badge top-right on
+ * *every* card, regardless of language direction — a brand mark's position
+ * shouldn't flip with RTL/LTR text flow (explicit ask: "top-left of both
+ * cards", not "the start side").
+ */
+export function CardHeader({ logoSrc, plate }: { logoSrc: string | null; plate: string | null }) {
   return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
-      <div style={{ display: "flex", alignItems: "center", order: rtl ? 2 : 1 }}>
+      <div style={{ display: "flex", alignItems: "center" }}>
         {logoSrc ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={logoSrc} height={28} style={{ objectFit: "contain" }} />
         ) : (
-          <span style={{ fontSize: 22, fontWeight: 700, color: COLORS.text, letterSpacing: 2 }}>CARNECT</span>
+          <span style={{ fontSize: 22, fontWeight: 700, color: COLORS.gold, letterSpacing: 2 }}>KARABA</span>
         )}
       </div>
       {plate && (
         <div
           style={{
             display: "flex",
-            order: rtl ? 1 : 2,
             background: COLORS.plate,
             color: COLORS.plateText,
             fontWeight: 700,
@@ -93,7 +98,8 @@ export function CardHeader({
   );
 }
 
-export function CardFooter({ tagline, dateLabel }: { tagline: string; dateLabel: string }) {
+/** Footer is the same brand bar on every card, in every language — see lib/brand.ts. */
+export function CardFooter({ dateLabel }: { dateLabel: string }) {
   return (
     <div
       style={{
@@ -106,7 +112,7 @@ export function CardFooter({ tagline, dateLabel }: { tagline: string; dateLabel:
         paddingTop: 12,
       }}
     >
-      <span style={{ display: "flex" }}>{tagline}</span>
+      <span style={{ display: "flex" }}>{cardFooterText()}</span>
       <span style={{ display: "flex" }}>{dateLabel}</span>
     </div>
   );
