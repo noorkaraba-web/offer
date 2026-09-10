@@ -7,14 +7,17 @@ import { CARD_LANGUAGES, CardLang } from "@/lib/i18n/cards";
 
 const CURRENCIES: Currency[] = ["USD", "EUR", "AED", "KRW", "JPY", "GBP", "CAD", "AUD"];
 
-export default function ShareToWhatsAppBlock({ vehicle, totalKrw }: { vehicle: Vehicle; totalKrw: number }) {
+export default function ShareToWhatsAppBlock({ vehicle, fobPriceKrw }: { vehicle: Vehicle; fobPriceKrw: number }) {
   const [lang, setLang] = useState<CardLang>("en");
   const [currency, setCurrency] = useState<Currency>("USD");
   const [rates, setRates] = useState<FxRates | null>(null);
   const [generated, setGenerated] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const vehicleCardLinkRef = useRef<HTMLAnchorElement>(null);
   const inspectionCardLinkRef = useRef<HTMLAnchorElement>(null);
+
+  const catalogPath = `/${lang}/catalog/${vehicle.listing_id}`;
 
   useEffect(() => {
     fetch("/api/fx?base=KRW")
@@ -23,10 +26,10 @@ export default function ShareToWhatsAppBlock({ vehicle, totalKrw }: { vehicle: V
       .catch(() => setRates(null));
   }, []);
 
-  // Landed price is derived from the deal calculator's total (KRW), not
-  // typed manually — it updates automatically as the calculator or the
-  // currency selector below changes.
-  const landedPrice = rates ? Math.round(convertFromKrw(totalKrw, currency, rates)) : 0;
+  // Landed price is derived from the FOB price field above, not typed
+  // manually here — it updates automatically as that field or the currency
+  // selector below changes.
+  const landedPrice = rates ? Math.round(convertFromKrw(fobPriceKrw, currency, rates)) : 0;
 
   const qs = new URLSearchParams({
     id: vehicle.listing_id,
@@ -53,8 +56,8 @@ export default function ShareToWhatsAppBlock({ vehicle, totalKrw }: { vehicle: V
     <div className="rounded-xl border border-navy-border bg-navy-surface p-4">
       <h3 className="text-sm font-semibold text-navy-text">📤 Share to WhatsApp</h3>
       <p className="mt-1 text-xs text-navy-muted">
-        Pick the customer&rsquo;s language and currency, then generate the images. Landed price comes
-        from the deal calculator&rsquo;s total above.
+        Pick the customer&rsquo;s language, then share the public catalog link below or generate PNG
+        cards. Landed price on the cards comes from the FOB price field above.
       </p>
 
       <div className="mt-3 flex flex-wrap gap-2">
@@ -69,6 +72,24 @@ export default function ShareToWhatsAppBlock({ vehicle, totalKrw }: { vehicle: V
             {l.label}
           </button>
         ))}
+      </div>
+
+      <div className="mt-3 flex items-center gap-2 rounded-lg border border-navy-border bg-navy-surface2 px-3 py-2 text-xs">
+        <span className="flex-1 truncate text-navy-muted">{catalogPath}</span>
+        <a href={catalogPath} target="_blank" rel="noopener noreferrer" className="font-medium text-carnect-accent">
+          Open ↗
+        </a>
+        <button
+          onClick={async () => {
+            const url = `${window.location.origin}${catalogPath}`;
+            await navigator.clipboard.writeText(url);
+            setLinkCopied(true);
+            setTimeout(() => setLinkCopied(false), 1500);
+          }}
+          className="font-medium text-carnect-accent"
+        >
+          {linkCopied ? "Copied!" : "Copy public link"}
+        </button>
       </div>
 
       <div className="mt-3 flex gap-2">

@@ -227,66 +227,17 @@ was checked against a too-narrow window around the `insurance` JSON key —
 listing (vs. a few hundred bytes on the first sample I had), so the bounded-window
 search was missing it. Now checked against the full page.
 
-## Deal calculator port
+## Deal calculator — removed
 
-The vehicle detail page's pricing tool (`components/PriceCalculator.tsx`) is a direct
-port of your standalone Deal Calculator (`index.html`), not a rewrite — the field
-names and the calculation chain in `lib/deal-calculator.ts` match it exactly:
-
-```
-discounted = carPrice - dealerDc
-vatBase = discounted + auctionFees
-vatAmount = invoice ? vatBase/11 : individual ? vatBase*0.07 : 0
-half ("Karaba DC") = vatAmount * vatSharePct/100
-offerPrice = vatBase - half
-totalKRW = offerPrice + fee + carrier + (CIF ? shipping : 0) + handling + parts + customFee + shoring
-fob = totalKRW / rate
-```
-
-`computeDeal()` in `lib/deal-calculator.ts` is verified against a hand-worked example
-(see the commit that adds it — every intermediate value checked, not just the total).
-One thing worth flagging since it looks like it could be a bug but isn't:
-**`incentivesAmount` is computed and shown as an internal-only info line but is *not*
-subtracted from `totalKRW`** — your original tool does this too, it's a reference
-figure (e.g. for spiff tracking), not part of the quoted price.
-
-**Auto-fill, as asked**: car name, plate, and VIN come from the looked-up listing and
-are shown read-only — nothing to retype. Car price is pre-filled from the listing's
-KRW price but stays editable (deals get renegotiated). The calculated total feeds the
-WhatsApp share cards automatically — the old manual "landed price" text box in the
-share block is gone; `ShareToWhatsAppBlock` now derives it from the calculator's
-`totalKRW` converted into whichever currency you pick there.
-
-**Kept exactly**: every input field (car price, auction fees, dealer discount, the
-three VAT modes, VAT-share %, incentives %, dealer fee, car carrier, shipping,
-shoring, handling + custom label, parts, custom fee + custom label, currency, rate),
-the Internal / Buyer-EN / Buyer-AR preview toggle, and the "Share text via WhatsApp"
-button (same message format, always buyer-safe regardless of which preview is
-showing, same as the source tool).
-
-**Deliberately not ported** (not requested, and not something this app's runtime
-supports):
-- PDF/photo export (`html2canvas` + `jsPDF`) — no canvas-rasterization library in this
-  stack; users can still screenshot the preview, or use the existing PNG share cards
-  for a shareable image.
-- Save/load-deal list — the source tool persisted deals via `window.storage`, an API
-  specific to its own hosting environment that doesn't exist here.
-- "Try fetch live rate" now calls this app's own `/api/fx` (which the rest of the app
-  already relies on) instead of `api.exchangerate-api.com` directly, but keeps the same
-  mid-market-minus-20-KRW heuristic your original comment documents (a rough
-  approximation of a bank's transfer-received rate — always double-check against Naver
-  if it matters).
-- The collapsible show/hide chrome around optional fields (dealer DC, incentives,
-  handling, parts, custom fee, shoring, VIN) wasn't ported — every field is just always
-  visible, labeled "leave empty to hide" where that's the field's semantics. Same
-  inputs, less UI chrome.
-
-**Offer Builder integration**: the old separate fee-breakdown price builder
-(`components/PriceBuilder.tsx`, PRD §5.4's multi-car offer tool) is gone — "Add to
-offer" is now a button inside the deal calculator, and it uses the calculator's
-`totalKRW` as the offer item's `price_krw` with the old itemized fee fields
-(`auction_fee_krw`/`carnect_fee_krw`/`inland_krw`/`freight_usd`) zeroed out, since
-those costs are now already folded into the calculator's own total.
+An earlier round of this build ported the standalone Deal Calculator tool into the
+vehicle detail page in full (VAT modes, Karaba DC, Internal/Buyer-EN/Buyer-AR preview,
+the works). That's gone now, by request — no calculator in this buyer-facing app.
+`lib/deal-calculator.ts`, `components/PriceCalculator.tsx`, and
+`components/VehiclePricingSection.tsx` were deleted outright. In their place,
+`components/VehiclePricing.tsx` is just what it says: one editable "FOB price (KRW)"
+field, pre-filled from the listing, with a USD/EUR conversion line underneath. It
+feeds both "Add to offer" and the WhatsApp share block's landed-price calculation —
+same wiring as before, minus everything the calculator added on top.
 
 ## Condition vocabulary translation dictionary
 
@@ -315,3 +266,96 @@ silently reaching a buyer. Since the dictionary was built from every term in the
 samples provided so far, some Korean status phrasing from listings not yet seen could
 still be missing — the logging is the mechanism for catching that as it comes up,
 not a claim of 100% coverage across every possible Encar listing.
+
+## Public catalog pages — `/{lang}/catalog/{id}`
+
+The buyer-facing link you actually send people, modelled on the MDM reference page.
+Server-rendered, no login, same listing ID across all 5 languages (`en`/`ar`/`ru`/`fr`/`es`)
+— the language switcher just swaps the URL segment. Example:
+`/ar/catalog/41626278`, `/en/catalog/heydealer/lG22apbQ`.
+
+**Why a second root layout**: WhatsApp/Telegram need real SSR HTML for the preview
+card, and Arabic needs genuine `dir="rtl"` on `<html>` for the browser to lay the page
+out right-to-left from first paint — not a client-side patch after the fact. A single
+shared root layout can't see the `[lang]` segment's value, so the app now has *two*
+root layouts, Next.js's own supported pattern for this
+([multiple root layouts](https://nextjs.org/docs/app/building-your-application/routing/route-groups#opting-specific-segments-out-of-shared-layouts)):
+`app/(staff)/layout.tsx` (the existing internal tool, unchanged, `<html lang="en">`)
+and `app/(catalog)/[lang]/layout.tsx` (new, `<html lang={lang} dir={rtl?'rtl':'ltr'}>`).
+Every existing staff route (`/`, `/car/...`, `/offer/...`, `/offers`) moved under
+`app/(staff)/` to make room — route groups (parens) don't change the URL, so none of
+those paths changed. `app/api/**` wasn't touched; API route handlers don't render a
+layout.
+
+**Open Graph — the most important part, per your framing**: `generateMetadata` in
+`app/(catalog)/[lang]/catalog/[...id]/page.tsx` sets `og:title` (make/model/year),
+`og:description` (mileage · fuel · a localized "turnkey price with delivery" line),
+and `og:image` at the first listing photo declared as 1280×768, plus the matching
+`twitter:card summary_large_image` tags. Listing photos are already absolute
+`https://` URLs (img.carnect.biz / heydealer's S3 bucket / carnect.biz's own
+`/api/images/`), so the image tag works with zero extra config. Canonical/alternate
+URLs need `NEXT_PUBLIC_SITE_URL` set once this is deployed (to build absolute URLs) —
+without it they still render as relative, which most platforms resolve fine against
+the page origin, but set it in production for the safest OG behaviour.
+
+**Equipment list, grouped by category — a data source worth flagging**: while
+building this I found that Encar's and HeyDealer's own listing pages already embed a
+complete, *already-translated* equipment/options JSON — `"options":[{"category":...,
+"label":{"ko":...,"en":...,"es":...,"ru":...,"ar":...},"items":[{"ko":...,"en":...,
+...}]}]` — confirmed against both real samples (Encar: 4 categories / 31 items, all
+4 languages present; HeyDealer: 2 categories / 4 items, English-only). I hadn't
+parsed this before — it's a separate structure from the condition/diagnosis JSON this
+project already reads. `extractEquipment()` in `lib/carnect-source.ts` pulls it out
+with a small bracket-depth-aware substring extractor (`extractBalanced`) rather than
+`JSON.parse`-ing the whole page, since the equipment array is one value buried in a
+much larger non-JSON payload; verified round-trips cleanly on both samples (31/31 and
+4/4 items, all fields intact). Neither source gives a French label, so
+`lib/i18n/equipment-fr.ts` fills that one gap with a real dictionary (all ~35 items
+across both samples, keyed by the source's own English label) — falls back to English
+and logs on a miss, same convention as the condition-terms dictionary. Category and
+item labels in en/ar/ru/es come straight from the source, untouched.
+
+**Fixing the exact bug you pointed out on MDM's page** (month names and colour
+leaking Russian on their Arabic page):
+- `lib/i18n/dates.ts` parses `reg_date` (confirmed live format `MM/YYYY`, e.g.
+  "Reg. date: 12/2022"; the mock seed predates that and uses `YYYY-MM`, so both are
+  handled) and renders a real localized month name — "December 2022" / "ديسمبر 2022" /
+  "décembre 2022" / etc. — instead of leaving the month as a raw number or, worse, in
+  the wrong language.
+- `lib/i18n/colors.ts` translates colour names properly rather than leaving them in
+  whatever language the source happened to give. carnect.biz's own spec table already
+  gives colour in English ("Color: Silver Gray", confirmed on a real listing), but
+  colour names are usually a hue word plus a marketing/proper-noun modifier ("Uyuni
+  White", "Abyss Black Pearl") that has no real translation — the fix recognizes and
+  translates ~30 common hue words (black/white/silver/gray/navy/pearl/metallic/etc.)
+  and leaves anything else (the proper-noun part) as-is, so "Uyuni White" becomes
+  "Uyuni أبيض" rather than mistranslated or silently left in English. Logs once if a
+  colour string contains *no* recognized hue word at all, so a genuinely new one is
+  visible rather than silently passed through unflagged.
+
+**Sections, in the order asked for**: photo gallery + thumbnails, specs grid,
+equipment by category, condition & inspection report (grade/diagnosis/inspection
+sheet, structural panel damage, the grouped self-diagnosis checklist, the
+water/modification/recall/basic-structure flags — all reusing the same
+`lib/i18n/cards.ts` and `lib/i18n/condition-terms.ts` dictionaries the PNG cards use,
+so the two surfaces never drift apart), insurance history (built from
+`condition.accidentCounts` with real translated sentences, not raw English text —
+falls back to the free-text `insurance_record` field for older/mock data that
+predates structured counts), FOB price (the live listing price in KRW + a USD
+conversion via the existing `lib/fx.ts`), and a WhatsApp contact button. Share buttons
+(copy link / WhatsApp / Telegram) sit right under the title. Full RTL for Arabic
+throughout — every section that has directional layout (icon/label ordering, text
+alignment) branches on `dir`, since Tailwind's `rtl:` variant alone doesn't cover JSX
+ordering decisions like "which side does the plate badge go on."
+
+**Both sharing paths stay live, as asked**: the PNG vehicle/inspection cards
+(`/api/cards/vehicle`, `/api/cards/condition`) are untouched. The staff vehicle detail
+page's WhatsApp share block now shows the public catalog link (copy / open, in
+whichever language is selected) directly above the existing PNG-card generation UI —
+link sharing and image sharing side by side, not a replacement of one by the other.
+
+**Not built**: no static generation / ISR for these pages yet (`generateStaticParams`
+is only used for the 5 `[lang]` values, not per-listing — each request fetches live,
+same caching as the rest of the app via `lib/carnect-source.ts`'s 6h cache). No
+sitemap. No per-listing Telegram-specific `og:image` sizing (Telegram is generally
+satisfied by the same Open Graph tags WhatsApp uses).

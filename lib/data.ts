@@ -51,6 +51,7 @@ export const VEHICLES: Vehicle[] = [
       flags: null,
     },
     updated_at: "2026-09-09T10:00:00Z",
+    equipment: [],
     data_origin: "mock",
   },
   {
@@ -95,6 +96,7 @@ export const VEHICLES: Vehicle[] = [
       flags: null,
     },
     updated_at: "2026-09-08T06:30:00Z",
+    equipment: [],
     data_origin: "mock",
   },
   {
@@ -138,6 +140,7 @@ export const VEHICLES: Vehicle[] = [
       flags: null,
     },
     updated_at: "2026-09-07T14:12:00Z",
+    equipment: [],
     data_origin: "mock",
   },
   {
@@ -182,6 +185,7 @@ export const VEHICLES: Vehicle[] = [
       flags: null,
     },
     updated_at: "2026-09-09T03:45:00Z",
+    equipment: [],
     data_origin: "mock",
   },
   {
@@ -225,6 +229,7 @@ export const VEHICLES: Vehicle[] = [
       flags: null,
     },
     updated_at: "2026-09-06T09:00:00Z",
+    equipment: [],
     data_origin: "mock",
   },
   {
@@ -268,6 +273,7 @@ export const VEHICLES: Vehicle[] = [
       flags: null,
     },
     updated_at: "2026-09-09T01:20:00Z",
+    equipment: [],
     data_origin: "mock",
   },
 ];

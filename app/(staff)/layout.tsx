@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import "./globals.css";
+import "../globals.css";
 import { OfferDraftProvider } from "@/lib/offer-draft-context";
 import Header from "@/components/Header";
 

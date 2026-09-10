@@ -1,6 +1,8 @@
 import {
   AccidentCounts,
   DiagnosisPanel,
+  EquipmentCategory,
+  EquipmentItem,
   PanelStatusCode,
   SelfDiagnosisItem,
   Source,
@@ -369,6 +371,98 @@ function buildHeydealerCondition(specs: Record<string, string>): VehicleConditio
   };
 }
 
+/**
+ * Finds the substring starting at `start` (which must point at `openCh`) up
+ * to and including its matching `closeCh`, treating `\"..\"` (the
+ * doubly-escaped quote pairs this RSC payload uses for JSON string
+ * delimiters) as opaque string spans so brackets inside label text never
+ * throw off the depth count. Returns null if no match is found — used to
+ * pull one nested JSON value (e.g. the equipment array below) out of the
+ * page without needing to `JSON.parse` the whole payload.
+ */
+function extractBalanced(text: string, start: number, openCh: string, closeCh: string): string | null {
+  if (text[start] !== openCh) return null;
+  let depth = 0;
+  let inString = false;
+  for (let i = start; i < text.length; i++) {
+    if (text[i] === "\\" && text[i + 1] === '"') {
+      inString = !inString;
+      i++; // consume both characters of the \" pair together
+      continue;
+    }
+    if (inString) continue;
+    if (text[i] === openCh) depth++;
+    else if (text[i] === closeCh) {
+      depth--;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
+const EQUIPMENT_LANGS = ["en", "ar", "ru", "es"] as const;
+
+/**
+ * Encar and HeyDealer listing pages both embed a real, already-translated
+ * equipment/options list as escaped JSON: `"options":[{"category":...,
+ * "label":{"ko":...,"en":...,"es":...,"ru":...,"ar":...},"items":[{"ko":...,
+ * "en":...,...}]}]`. Confirmed against real samples for both sources (Encar:
+ * 4 categories / 31 items, all 4 languages present; HeyDealer: 2 categories /
+ * 4 items, English-only — HeyDealer's own "ko" field is literally English
+ * text). Neither source gives a "fr" key, so French is filled in separately
+ * via lib/i18n/equipment-fr.ts at render time. Anchored on `{\"category\"`
+ * specifically because self-diagnosis status codes elsewhere in the page
+ * also have an unrelated `"options":[{"code":...` array with the same key
+ * name — this pattern only matches the real equipment list.
+ */
+function extractEquipment(html: string): EquipmentCategory[] {
+  const anchor = html.indexOf('\\"options\\":[{\\"category\\"');
+  if (anchor === -1) return [];
+
+  const arrayStart = anchor + '\\"options\\":'.length;
+  const raw = extractBalanced(html, arrayStart, "[", "]");
+  if (!raw) return [];
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw.replace(/\\"/g, '"'));
+  } catch {
+    return []; // Unexpected shape — degrade to no equipment section rather than throw.
+  }
+  if (!Array.isArray(parsed)) return [];
+
+  const categories: EquipmentCategory[] = [];
+  for (const cat of parsed) {
+    if (!cat || typeof cat !== "object") continue;
+    const c = cat as Record<string, unknown>;
+    const category = typeof c.category === "string" ? c.category : "";
+    if (!category) continue;
+
+    const rawLabels = (c.label ?? {}) as Record<string, unknown>;
+    const labels: EquipmentCategory["labels"] = {};
+    for (const lang of EQUIPMENT_LANGS) {
+      if (typeof rawLabels[lang] === "string") labels[lang] = rawLabels[lang] as string;
+    }
+
+    const items: EquipmentItem[] = [];
+    if (Array.isArray(c.items)) {
+      for (const it of c.items) {
+        if (!it || typeof it !== "object") continue;
+        const rawItem = it as Record<string, unknown>;
+        const key = typeof rawItem.en === "string" ? rawItem.en : typeof rawItem.ko === "string" ? rawItem.ko : "";
+        if (!key) continue;
+        const itemLabels: EquipmentItem["labels"] = {};
+        for (const lang of EQUIPMENT_LANGS) {
+          if (typeof rawItem[lang] === "string") itemLabels[lang] = rawItem[lang] as string;
+        }
+        items.push({ key, labels: itemLabels });
+      }
+    }
+    if (items.length > 0) categories.push({ category, labels, items });
+  }
+  return categories;
+}
+
 function extractPhotos(html: string): string[] {
   const seen = new Set<string>(); // dedupe by path, ignoring crop/query params
   const photos: string[] = [];
@@ -489,6 +583,7 @@ function parseListingHtml(html: string, listingId: string, source: Source): Vehi
     price_krw: Number(priceKrwM[1].replace(/,/g, "")),
     photos: extractPhotos(html),
     condition,
+    equipment: extractEquipment(html),
     updated_at: new Date().toISOString(),
     data_origin: "live",
   };

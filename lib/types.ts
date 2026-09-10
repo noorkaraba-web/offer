@@ -64,6 +64,21 @@ export interface VehicleCondition {
   flags: { waterDamage: boolean; modification: boolean; recall: boolean; basicStructureDamage: boolean } | null;
 }
 
+/** One equipment/option line, with whichever language labels the source gave natively. */
+export interface EquipmentItem {
+  /** Stable dedupe key — the source's own (usually Korean or English) label. */
+  key: string;
+  /** Labels keyed by our 5 card languages, only for the ones the source provided. */
+  labels: Partial<Record<"en" | "ar" | "ru" | "fr" | "es", string>>;
+}
+
+export interface EquipmentCategory {
+  /** Raw category key/name from the source, e.g. "interiorExterior" or "Seats". */
+  category: string;
+  labels: Partial<Record<"en" | "ar" | "ru" | "fr" | "es", string>>;
+  items: EquipmentItem[];
+}
+
 export interface Vehicle {
   listing_id: string;
   source: Source;
@@ -86,6 +101,8 @@ export interface Vehicle {
   price_krw: number;
   photos: string[];
   condition: VehicleCondition;
+  /** Equipment/options list grouped by category, when the source exposes it (Encar/HeyDealer). */
+  equipment: EquipmentCategory[];
   updated_at: string;
   /** Where this record actually came from — surfaced in the UI so staff can tell live data from the mock fallback. */
   data_origin: "live" | "mock";
